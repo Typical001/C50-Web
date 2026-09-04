@@ -1,0 +1,408 @@
+{
+  "users": [
+    {
+      "id": "usr_admin",
+      "email": "admin@carrier50.com",
+      "name": "Dr. Alok Verma",
+      "role": "admin",
+      "avatarUrl": "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&q=80&w=200",
+      "createdAt": "2026-07-03T06:08:16.905Z",
+      "passwordHash": "8a2d78292cd7d735f5b25bb80e21703c:eed29862d9a797c2c036614a8aa087fed0e1c08cc5f490d922e1cada951e580f66ced24ea96f435440a1eaf647cde84995400fdd6bd9ee741a905d12de753af0",
+      "isVerified": true
+    },
+    {
+      "id": "usr_student",
+      "email": "student@carrier50.com",
+      "name": "Arjun Kumar",
+      "role": "student",
+      "avatarUrl": "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&q=80&w=200",
+      "createdAt": "2026-07-03T06:08:16.905Z",
+      "passwordHash": "d17ea9021837f2bff3244e4a8869be07:1ba78c3abc54ab8c09742e7dd7dfebf4b8706ba32303c3fe686334ac5587f21c8a6ea2bc3fb3c61ebcd99a56c06274c83fff84806a5c0d39142e9f148ec6a323",
+      "isVerified": true
+    }
+  ],
+  "batches": [
+    {
+      "id": "batch_mppsc_foundation",
+      "title": "MPPSC Foundation Batch (Prelims + Mains)",
+      "description": "A comprehensive, structured roadmap for MPPSC Prelims & Mains. Taught by Madhya Pradesh's top civil services educators. Includes live lectures, handwritten notes, mock test series, and mentorship.",
+      "instructor": "Dr. Alok Verma",
+      "price": 15000,
+      "discountPrice": 7499,
+      "duration": "12 Months",
+      "totalLectures": 24,
+      "notesCount": 15,
+      "language": "Hindi/English",
+      "difficulty": "Intermediate",
+      "tags": [
+        "MPPSC",
+        "Foundation",
+        "Indore",
+        "Mains"
+      ],
+      "category": "Foundation Courses",
+      "enrollmentCount": 4890,
+      "bannerUrl": "https://images.unsplash.com/photo-1522202176988-66273c2fd55f?auto=format&fit=crop&q=80&w=1200",
+      "thumbnailUrl": "https://images.unsplash.com/photo-1522202176988-66273c2fd55f?auto=format&fit=crop&q=80&w=400",
+      "lastUpdated": "2026-07-03T06:08:16.905Z",
+      "isFree": false,
+      "rating": 4.8,
+      "ratingCount": 2500,
+      "customTag": "Bestseller"
+    },
+    {
+      "id": "batch_mppsc_prelims",
+      "title": "MPPSC Prelims Revision Crash Course",
+      "description": "Targeted revision for MPPSC Prelims. Focused on high-yielding topics of MP GK, Polity, History, Economy, and CSAT with comprehensive daily test series.",
+      "instructor": "Dr. Alok Verma",
+      "price": 6000,
+      "discountPrice": 2999,
+      "duration": "3 Months",
+      "totalLectures": 18,
+      "notesCount": 10,
+      "language": "Hindi/English",
+      "difficulty": "Beginner",
+      "tags": [
+        "MPPSC",
+        "Prelims",
+        "Crash Course",
+        "Revision"
+      ],
+      "category": "Crash Courses",
+      "enrollmentCount": 3200,
+      "bannerUrl": "https://images.unsplash.com/photo-1434030216411-0b793f4b4173?auto=format&fit=crop&q=80&w=1200",
+      "thumbnailUrl": "https://images.unsplash.com/photo-1434030216411-0b793f4b4173?auto=format&fit=crop&q=80&w=400",
+      "lastUpdated": "2026-07-03T06:08:16.905Z",
+      "isFree": false,
+      "rating": 4.8,
+      "ratingCount": 2100,
+      "customTag": "Popular"
+    },
+    {
+      "id": "batch_mppsc_mains",
+      "title": "MPPSC Mains Answer Writing Program",
+      "description": "Master the art of answer writing for MPPSC Mains. Covers daily answer evaluation, model answers, detailed paper discussions, and feedback from top mentors.",
+      "instructor": "Prof. Sarah Vance",
+      "price": 8000,
+      "discountPrice": 3999,
+      "duration": "4 Months",
+      "totalLectures": 15,
+      "notesCount": 8,
+      "language": "Hindi/English",
+      "difficulty": "Advanced",
+      "tags": [
+        "MPPSC",
+        "Mains",
+        "Answer Writing",
+        "Evaluation"
+      ],
+      "category": "Writing Programs",
+      "enrollmentCount": 1250,
+      "bannerUrl": "https://images.unsplash.com/photo-1455390582262-044cdead277a?auto=format&fit=crop&q=80&w=1200",
+      "thumbnailUrl": "https://images.unsplash.com/photo-1455390582262-044cdead277a?auto=format&fit=crop&q=80&w=400",
+      "lastUpdated": "2026-07-03T06:08:16.905Z",
+      "isFree": false,
+      "rating": 4.7,
+      "ratingCount": 1800,
+      "customTag": "New"
+    },
+    {
+      "id": "batch_mppsc_interview",
+      "title": "MPPSC Interview Guidance & Mock Panels",
+      "description": "Prepare for the final stage with retired civil servants and expert panels. Includes personalized feedback, DAF analysis, and live mock interviews.",
+      "instructor": "Dr. Alok Verma",
+      "price": 5000,
+      "discountPrice": 1999,
+      "duration": "2 Months",
+      "totalLectures": 8,
+      "notesCount": 4,
+      "language": "Hindi/English",
+      "difficulty": "Advanced",
+      "tags": [
+        "MPPSC",
+        "Interview",
+        "Mock Panel",
+        "Guidance"
+      ],
+      "category": "Interview Prep",
+      "enrollmentCount": 650,
+      "bannerUrl": "https://images.unsplash.com/photo-1573497019940-1c28c88b4f3e?auto=format&fit=crop&q=80&w=1200",
+      "thumbnailUrl": "https://images.unsplash.com/photo-1573497019940-1c28c88b4f3e?auto=format&fit=crop&q=80&w=400",
+      "lastUpdated": "2026-07-03T06:08:16.905Z",
+      "isFree": false,
+      "rating": 4.7,
+      "ratingCount": 1400,
+      "customTag": "Premium"
+    },
+    {
+      "id": "batch_mppsc_current",
+      "title": "MPPSC Current Affairs Mastery Program",
+      "description": "Weekly current affairs roundups covering Madhya Pradesh state news, budget, schemes, and national & international events specifically for MPPSC examinations.",
+      "instructor": "Hitesh Choudhary",
+      "price": 2000,
+      "discountPrice": 999,
+      "duration": "6 Months",
+      "totalLectures": 12,
+      "notesCount": 12,
+      "language": "Hindi/English",
+      "difficulty": "Beginner",
+      "tags": [
+        "Current Affairs",
+        "MP GK",
+        "Monthly Roundup"
+      ],
+      "category": "Current Affairs",
+      "enrollmentCount": 2200,
+      "bannerUrl": "https://images.unsplash.com/photo-1504711434969-e33886168f5c?auto=format&fit=crop&q=80&w=1200",
+      "thumbnailUrl": "https://images.unsplash.com/photo-1504711434969-e33886168f5c?auto=format&fit=crop&q=80&w=400",
+      "lastUpdated": "2026-07-03T06:08:16.905Z",
+      "isFree": false,
+      "rating": 4.8,
+      "ratingCount": 1500,
+      "customTag": "Popular"
+    },
+    {
+      "id": "batch_mppsc_pyq",
+      "title": "MPPSC Prelims PYQ Video Solutions (Free)",
+      "description": "A complete archive of previous years' MPPSC Prelims question papers with in-depth video explanations and micro-concept analysis.",
+      "instructor": "Prof. Sarah Vance",
+      "price": 0,
+      "discountPrice": 0,
+      "duration": "1 Month",
+      "totalLectures": 6,
+      "notesCount": 6,
+      "language": "Hindi/English",
+      "difficulty": "Beginner",
+      "tags": [
+        "PYQ",
+        "Free Course",
+        "Prelims"
+      ],
+      "category": "Free Resources",
+      "enrollmentCount": 9500,
+      "bannerUrl": "https://images.unsplash.com/photo-1506784983877-45594efa4cbe?auto=format&fit=crop&q=80&w=1200",
+      "thumbnailUrl": "https://images.unsplash.com/photo-1506784983877-45594efa4cbe?auto=format&fit=crop&q=80&w=400",
+      "lastUpdated": "2026-07-03T12:00:00Z",
+      "isFree": true,
+      "rating": 4.6,
+      "ratingCount": 1600,
+      "customTag": "Free"
+    }
+  ],
+  "subjects": [
+    {
+      "id": "subj_mppsc_gk",
+      "batchId": "batch_mppsc_foundation",
+      "title": "Madhya Pradesh GK & History",
+      "description": "Comprehensive study of Madhya Pradesh's history, heritage, art, and prominent personalities."
+    },
+    {
+      "id": "subj_mppsc_polity",
+      "batchId": "batch_mppsc_foundation",
+      "title": "Indian Polity & Governance",
+      "description": "Study of constitutional frameworks, state assemblies, panchayati raj, and administrative structures."
+    },
+    {
+      "id": "subj_mppsc_pre_gk",
+      "batchId": "batch_mppsc_prelims",
+      "title": "MP Specific Prelims Prep",
+      "description": "Fast-track coverage of Madhya Pradesh geography, forest policies, and tribal culture."
+    },
+    {
+      "id": "subj_mppsc_pyq_subj",
+      "batchId": "batch_mppsc_pyq",
+      "title": "Prelims PYQs",
+      "description": "Year-by-year video breakdown of Prelims GS Paper I."
+    }
+  ],
+  "chapters": [
+    {
+      "id": "chap_mppsc_hist",
+      "subjectId": "subj_mppsc_gk",
+      "title": "Dynasties of Madhya Pradesh",
+      "description": "Understanding the Bundela, Holkar, Scindia, and Gond dynasties."
+    },
+    {
+      "id": "chap_mppsc_panch",
+      "subjectId": "subj_mppsc_polity",
+      "title": "73rd & 74th Amendments in MP",
+      "description": "Local self-government structure, powers, and implementation in MP."
+    },
+    {
+      "id": "chap_mppsc_tribes",
+      "subjectId": "subj_mppsc_pre_gk",
+      "title": "Tribes & Folk Art of MP",
+      "description": "Detailed analysis of Bhil, Gond, Korku, Sahariya tribes and their cultural impact."
+    },
+    {
+      "id": "chap_mppsc_pyq_2023",
+      "subjectId": "subj_mppsc_pyq_subj",
+      "title": "MPPSC 2023 Prelims Solutions",
+      "description": "Full breakdown of questions and optional elimination techniques."
+    }
+  ],
+  "lectures": [
+    {
+      "id": "lec_1",
+      "chapterId": "chap_mppsc_hist",
+      "title": "The Holkar Dynasty & Administration of Devi Ahilya Bai",
+      "description": "First lecture on MP GK. Detailed analysis of Holkar history, capital shifting to Maheshwar, and Devi Ahilya Bai's administrative achievements.",
+      "videoUrl": "https://www.youtube.com/embed/S2pSre7G6eU",
+      "notesUrl": "/uploads/lec1_physics_kinematics.pdf",
+      "notesTitle": "Holkar Dynasty Hand-written Revision Notes",
+      "duration": "48:30",
+      "attachments": [
+        "holkar_dynasty_notes.pdf",
+        "mppsc_mains_questions.pdf"
+      ]
+    },
+    {
+      "id": "lec_2",
+      "chapterId": "chap_mppsc_panch",
+      "title": "Panchayati Raj System in MP & State Election Commission",
+      "description": "Key lecture on Polity. Exploring the local self-government acts in Madhya Pradesh and role of SEC in rural administration.",
+      "videoUrl": "https://www.youtube.com/embed/Ke90Tje7VS0",
+      "notesUrl": "/uploads/lec2_projectile_motion.pdf",
+      "notesTitle": "Panchayati Raj Constitutional Framework Notes",
+      "duration": "52:15",
+      "attachments": [
+        "panchayati_raj_mcqs.pdf"
+      ]
+    },
+    {
+      "id": "lec_3",
+      "chapterId": "chap_mppsc_tribes",
+      "title": "Tribal Tribes of MP: Gonds, Bhils, and Sahariya Lifestyles",
+      "description": "Understanding tribal distributions, folk songs, Bhagoria festival, and state schemes for tribal upliftment.",
+      "videoUrl": "https://www.youtube.com/embed/zJSY8tbf_ys",
+      "notesUrl": "/uploads/lec3_friction.pdf",
+      "notesTitle": "MP Tribal Culture & Traditions Cheat Sheet",
+      "duration": "38:40"
+    },
+    {
+      "id": "lec_4",
+      "chapterId": "chap_mppsc_pyq_2023",
+      "title": "2023 Prelims GS Paper I: Detailed Solution Part 1",
+      "description": "Answering questions 1 to 50 of the 2023 MPPSC Prelims paper with deep conceptual explanations and tips.",
+      "videoUrl": "https://www.youtube.com/embed/fDKe8_fEor4",
+      "notesUrl": "/uploads/lec4_calculus_limits.pdf",
+      "notesTitle": "2023 Prelims Answer Key & Explanation PDF",
+      "duration": "50:10"
+    }
+  ],
+  "enrollments": [
+    {
+      "id": "enr_1",
+      "userId": "usr_student",
+      "batchId": "batch_mppsc_foundation",
+      "enrolledAt": "2026-07-03T06:08:16.905Z"
+    },
+    {
+      "id": "enr_98b8e6dc91",
+      "userId": "f9d02801-82bd-4030-b073-699945412ec7",
+      "batchId": "a0000000-0000-0000-0000-000000000001",
+      "enrolledAt": "2026-07-15T09:08:01.060Z"
+    }
+  ],
+  "payments": [
+    {
+      "id": "pay_1",
+      "userId": "usr_student",
+      "batchId": "batch_mppsc_foundation",
+      "amount": 7499,
+      "status": "success",
+      "razorpayOrderId": "order_foundation_init",
+      "createdAt": "2026-07-03T06:08:16.905Z"
+    }
+  ],
+  "announcements": [
+    {
+      "id": "ann_1",
+      "title": "Welcome to Aura Academy MPPSC Platform!",
+      "content": "We are thrilled to launch Aura Academy, a premium, distraction-free MPPSC preparation portal. Get started with our free PYQ solutions batch immediately. Happy Learning!",
+      "type": "course",
+      "authorId": "usr_admin",
+      "createdAt": "2026-07-03T06:08:16.905Z",
+      "batchId": null
+    },
+    {
+      "id": "ann_2",
+      "title": "MPPSC Foundation Batch: Devi Ahilya Bai Lecture Notes Uploaded",
+      "content": "Hello Foundation Batch Aspirants, I have uploaded the comprehensive Holkar Dynasty notes. Please review them before the live doubt session tomorrow.",
+      "type": "notice",
+      "authorId": "usr_admin",
+      "createdAt": "2026-07-03T06:08:16.905Z",
+      "batchId": "batch_mppsc_foundation"
+    },
+    {
+      "id": "ann_3",
+      "title": "Scheduled MPPSC Mains Model Answer Keys Release",
+      "content": "We will be releasing model answer keys for the recent Mains writing program tonight at 9:00 PM. Stay tuned and check the attachments tab.",
+      "type": "update",
+      "authorId": "usr_admin",
+      "createdAt": "2026-07-03T06:08:16.905Z",
+      "batchId": null
+    }
+  ],
+  "progress": [
+    {
+      "userId": "usr_student",
+      "lectureId": "lec_1",
+      "completed": true,
+      "watchPercentage": 100,
+      "lastWatchedAt": "2026-07-03T06:08:16.905Z"
+    },
+    {
+      "userId": "f9d02801-82bd-4030-b073-699945412ec7",
+      "lectureId": "d0000000-0000-0000-0000-000000000001",
+      "completed": true,
+      "watchPercentage": 100,
+      "lastWatchedAt": "2026-07-15T09:08:38.924Z"
+    },
+    {
+      "userId": "f9d02801-82bd-4030-b073-699945412ec7",
+      "lectureId": "d38ae0fd-6d3b-403c-9ee9-7b441e28b717",
+      "completed": false,
+      "watchPercentage": 0,
+      "lastWatchedAt": "2026-07-15T15:37:19.154Z"
+    }
+  ],
+  "watchHistory": [
+    {
+      "userId": "usr_student",
+      "lectureId": "lec_1",
+      "playbackTime": 2910,
+      "updatedAt": "2026-07-03T06:08:16.905Z"
+    },
+    {
+      "userId": "f9d02801-82bd-4030-b073-699945412ec7",
+      "lectureId": "d0000000-0000-0000-0000-000000000001",
+      "playbackTime": 0,
+      "updatedAt": "2026-08-31T13:11:59.363Z"
+    },
+    {
+      "userId": "f9d02801-82bd-4030-b073-699945412ec7",
+      "lectureId": "d0000000-0000-0000-0000-000000000002",
+      "playbackTime": 0,
+      "updatedAt": "2026-07-15T14:31:45.262Z"
+    },
+    {
+      "userId": "f9d02801-82bd-4030-b073-699945412ec7",
+      "lectureId": "d38ae0fd-6d3b-403c-9ee9-7b441e28b717",
+      "playbackTime": 0,
+      "updatedAt": "2026-07-15T16:37:56.291Z"
+    }
+  ],
+  "dailyStreaks": [
+    {
+      "userId": "usr_student",
+      "streakCount": 5,
+      "lastActiveDate": "2026-07-03"
+    },
+    {
+      "userId": "f9d02801-82bd-4030-b073-699945412ec7",
+      "streakCount": 1,
+      "lastActiveDate": "2026-07-15"
+    }
+  ]
+}

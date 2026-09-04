@@ -1,0 +1,43 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
+}
+
+@layer base {
+  body {
+    @apply font-sans antialiased text-[#1d1d1f] bg-[#f5f5f7];
+  }
+}
+
+/* Custom glassmorphism and subtle shadow presets */
+.glass-nav {
+  background-color: rgba(255, 255, 255, 0.72);
+  backdrop-filter: saturate(180%) blur(20px);
+  border-bottom: 1px solid rgba(0, 0, 0, 0.08);
+}
+
+.dark .glass-nav {
+  background-color: rgba(22, 22, 23, 0.72);
+  backdrop-filter: saturate(180%) blur(20px);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.apple-card {
+  @apply bg-white rounded-3xl border border-black/5 shadow-[0_8px_30px_rgba(0,0,0,0.02)] transition-all duration-500 hover:shadow-[0_20px_40px_rgba(109,93,246,0.08)] hover:translate-y-[-4px];
+}
+
+.apple-btn-primary {
+  @apply bg-[#6D5DF6] text-white font-semibold px-5 py-2.5 rounded-full hover:bg-[#7C4DFF] hover:scale-[1.02] transition-all duration-300 focus:ring-2 focus:ring-[#6D5DF6]/30 outline-none cursor-pointer shadow-md shadow-[#6D5DF6]/10;
+}
+
+.apple-btn-secondary {
+  @apply border-2 border-[#6D5DF6] text-[#6D5DF6] font-semibold px-5 py-2.5 rounded-full hover:bg-[#6D5DF6]/5 hover:scale-[1.02] transition-all duration-300 outline-none cursor-pointer;
+}
+
+.text-gradient-purple {
+  @apply bg-gradient-to-r from-[#6D5DF6] via-[#7C4DFF] to-indigo-600 bg-clip-text text-transparent;
+}
+

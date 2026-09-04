@@ -1,0 +1,6 @@
+{
+  "name": "Carrier 50",
+  "description": "A premium, minimalistic, and elegant full-stack education platform featuring batch browsing, secure course player, note downloading, and an interactive admin dashboard.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
