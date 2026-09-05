@@ -13,7 +13,7 @@ import crypto from 'crypto';
 import { Request, Response, NextFunction } from 'express';
 
 const app = express();
-const PORT = 3000;
+const PORT = Number(process.env.PORT) || 3000;
 
 // Enable CORS for admin panel requests
 app.use((req: Request, res: Response, next: NextFunction) => {
@@ -232,6 +232,12 @@ app.use((req: Request, res: Response, next: NextFunction) => {
 // Set up larger limit for base64 file uploads (PDFs, thumbnails)
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ extended: true, limit: '50mb' }));
+
+// Used by Render and other hosting providers to verify the service is running.
+// It intentionally does not depend on Supabase or any local file storage.
+app.get('/health', (_req: Request, res: Response) => {
+  res.status(200).json({ status: 'ok' });
+});
 
 // Directories
 const DATA_DIR = path.join(process.cwd(), 'data');
