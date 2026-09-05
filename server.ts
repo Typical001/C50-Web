@@ -7,28 +7,60 @@ import {
   Enrollment, Payment, Announcement, Progress, 
   WatchHistory, DailyStreak, DashboardStats
 } from './src/types.js';
-import { supabase } from './src/lib/supabaseClient.js';
-
+import 'dotenv/config';
 import crypto from 'crypto';
 import { Request, Response, NextFunction } from 'express';
+import { createClient } from '@supabase/supabase-js';
 
 const app = express();
 const PORT = Number(process.env.PORT) || 3000;
 
-// Enable CORS for admin panel requests
+function requiredServerEnv(name: string): string {
+  const value = process.env[name]?.trim();
+  if (!value) throw new Error(`Missing required server environment variable: ${name}`);
+  return value;
+}
+
+const APP_URL = requiredServerEnv('APP_URL').replace(/\/$/, '');
+const SUPABASE_URL = requiredServerEnv('SUPABASE_URL');
+const SUPABASE_PUBLISHABLE_KEY = requiredServerEnv('SUPABASE_PUBLISHABLE_KEY');
+const SESSION_SECRET = requiredServerEnv('SESSION_SECRET');
+const SUPABASE_SECRET_KEY = requiredServerEnv('SUPABASE_SECRET_KEY');
+const allowedOrigins = new Set(
+  [APP_URL, ...(process.env.CORS_ALLOWED_ORIGINS || '').split(',')]
+    .map(origin => origin.trim().replace(/\/$/, ''))
+    .filter(Boolean)
+);
+
+// Only explicitly configured web origins may call this API cross-origin.
 app.use((req: Request, res: Response, next: NextFunction) => {
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+  const origin = req.headers.origin?.replace(/\/$/, '');
+  if (origin) {
+    if (!allowedOrigins.has(origin)) {
+      return res.status(403).json({ error: 'Origin is not allowed.' });
+    }
+    res.setHeader('Access-Control-Allow-Origin', origin);
+    res.setHeader('Vary', 'Origin');
+    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+  }
   if (req.method === 'OPTIONS') {
-    res.sendStatus(200);
+    res.sendStatus(204);
     return;
   }
   next();
 });
 
-// Session Secret for Crypto token signing
-const SESSION_SECRET = process.env.SESSION_SECRET || 'carrier50_secure_default_secret_382910_92813';
+const supabase = createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, {
+  auth: { persistSession: false, autoRefreshToken: false }
+});
+const supabaseAdmin = createClient(SUPABASE_URL, SUPABASE_SECRET_KEY, {
+  auth: { persistSession: false, autoRefreshToken: false }
+});
+
+function getSupabaseAdmin() {
+  return supabaseAdmin;
+}
 
 // -------------------------------------------------------------
 // Security Logging System
@@ -203,7 +235,16 @@ function sanitizeInput<T>(input: T): T {
 // Global Sanitization Middleware
 app.use((req: Request, res: Response, next: NextFunction) => {
   if (req.body) {
+    // FileReader sends `/api/upload` a Base64 data URI. Sanitizing that string
+    // would alter valid Base64 characters such as `/`; it is instead validated
+    // and stored without ever being rendered by the upload handler below.
+    const rawFileData = req.path === '/api/upload' && typeof req.body.fileData === 'string'
+      ? req.body.fileData
+      : undefined;
     req.body = sanitizeInput(req.body);
+    if (rawFileData !== undefined) {
+      req.body.fileData = rawFileData;
+    }
   }
   if (req.query) {
     req.query = sanitizeInput(req.query);
@@ -229,9 +270,10 @@ app.use((req: Request, res: Response, next: NextFunction) => {
   next();
 });
 
-// Set up larger limit for base64 file uploads (PDFs, thumbnails)
-app.use(express.json({ limit: '50mb' }));
-app.use(express.urlencoded({ extended: true, limit: '50mb' }));
+// Base64 is used only by the legacy dashboard upload form. The raw upload
+// limit is enforced again in `/api/upload` before data reaches Storage.
+app.use(express.json({ limit: '30mb' }));
+app.use(express.urlencoded({ extended: true, limit: '30mb' }));
 
 // Used by Render and other hosting providers to verify the service is running.
 // It intentionally does not depend on Supabase or any local file storage.
@@ -242,19 +284,11 @@ app.get('/health', (_req: Request, res: Response) => {
 // Directories
 const DATA_DIR = path.join(process.cwd(), 'data');
 const DB_PATH = path.join(DATA_DIR, 'db.json');
-const UPLOADS_DIR = path.join(process.cwd(), 'public', 'uploads');
 
 // Ensure directories exist
 if (!fs.existsSync(DATA_DIR)) {
   fs.mkdirSync(DATA_DIR, { recursive: true });
 }
-if (!fs.existsSync(UPLOADS_DIR)) {
-  fs.mkdirSync(UPLOADS_DIR, { recursive: true });
-}
-
-// Helper to serve uploaded files statically
-app.use('/uploads', express.static(UPLOADS_DIR));
-
 // Initial Database Template
 interface DatabaseSchema {
   users: User[];
@@ -559,56 +593,9 @@ const initialDb: DatabaseSchema = {
   ]
 };
 
-// Write default PDF files to let students download something that is real
-const writeMockPdfs = () => {
-  const dummyPdfContent = `%PDF-1.4
-1 0 obj
-<< /Type /Catalog /Pages 2 0 R >>
-endobj
-2 0 obj
-<< /Type /Pages /Kids [3 0 R] /Count 1 >>
-endobj
-3 0 obj
-<< /Type /Page /Parent 2 0 R /Resources << >> /MediaBox [0 0 612 792] /Contents 4 0 R >>
-endobj
-4 0 obj
-<< /Length 44 >>
-stream
-BT
-/F1 12 Tf
-72 712 Td
-(Aura Academy Study Notes PDF - High Quality File) Tj
-ET
-endstream
-endobj
-xref
-0 5
-0000000000 65535 f 
-0000000009 00000 n 
-0000000058 00000 n 
-0000000115 00000 n 
-0000000215 00000 n 
-trailer
-<< /Size 5 /Root 1 0 R >>
-startxref
-310
-%%EOF`;
-
-  const files = [
-    'lec1_physics_kinematics.pdf',
-    'lec2_projectile_motion.pdf',
-    'lec3_friction.pdf',
-    'lec4_calculus_limits.pdf',
-    'lec5_react19_architecture.pdf'
-  ];
-
-  files.forEach(file => {
-    const filePath = path.join(UPLOADS_DIR, file);
-    if (!fs.existsSync(filePath)) {
-      fs.writeFileSync(filePath, dummyPdfContent);
-    }
-  });
-};
+// Legacy JSON fallback calls this helper when no database exists. It is now a
+// no-op: production assets are stored only in Supabase Storage.
+const writeMockPdfs = () => undefined;
 
 // Read / Write DB Functions
 const readDb = (): DatabaseSchema => {
@@ -658,9 +645,6 @@ const readDb = (): DatabaseSchema => {
 const writeDb = (data: DatabaseSchema) => {
   fs.writeFileSync(DB_PATH, JSON.stringify(data, null, 2));
 };
-
-// Init DB
-readDb();
 
 // -------------------------------------------------------------
 // Authentication Endpoints
@@ -806,7 +790,7 @@ app.post('/api/auth/forgot-password', rateLimitAuth, async (req, res) => {
   const { email } = req.body;
   try {
     const { error } = await supabase.auth.resetPasswordForEmail(email.trim(), {
-      redirectTo: `${req.headers.origin || 'http://localhost:3000'}/reset-password`
+      redirectTo: `${APP_URL}/reset-password`
     });
     if (error) throw error;
     res.json({ message: 'If this email exists in our records, a secure password reset link has been dispatched.' });
@@ -824,11 +808,7 @@ app.post('/api/auth/reset-password', async (req, res) => {
   }
 
   try {
-    const { createClient } = await import('@supabase/supabase-js');
-    const supabaseUrl = process.env.VITE_SUPABASE_URL || 'https://ypueconmqgcgcbvqqkqf.supabase.co';
-    const supabaseAnonKey = process.env.VITE_SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InlwdWVjb25tcWdjZ2NidnFxa3FmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODA4OTcyMjUsImV4cCI6MjA5NjQ3MzIyNX0.lP6mkG6bUBwLd5eq-nTJvwlhh04cp0h4zCVzp_2vGw4';
-    
-    const userClient = createClient(supabaseUrl, supabaseAnonKey, {
+    const userClient = createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, {
       auth: {
         persistSession: false,
         autoRefreshToken: false
@@ -950,6 +930,50 @@ function mapLecture(l: any): Lecture {
   };
 }
 
+function mapEnrollment(enrollment: any): Enrollment {
+  return {
+    id: enrollment.id,
+    userId: enrollment.user_id,
+    batchId: enrollment.batch_id,
+    enrolledAt: enrollment.created_at
+  };
+}
+
+function mapPayment(payment: any): Payment {
+  return {
+    id: payment.id,
+    userId: payment.user_id,
+    batchId: payment.batch_id,
+    amount: Number(payment.amount) || 0,
+    status: payment.status,
+    razorpayOrderId: payment.gateway_order_id || '',
+    razorpayPaymentId: payment.gateway_payment_id || '',
+    createdAt: payment.created_at
+  };
+}
+
+function mapProgress(progress: any): Progress {
+  return {
+    userId: progress.user_id,
+    lectureId: progress.lecture_id,
+    completed: Boolean(progress.completed),
+    watchPercentage: Number(progress.watch_percentage) || 0,
+    lastWatchedAt: progress.updated_at
+  };
+}
+
+function mapAnnouncement(announcement: any): Announcement {
+  return {
+    id: announcement.id,
+    title: announcement.title,
+    content: announcement.message || '',
+    type: announcement.type || 'notice',
+    authorId: announcement.created_by || '',
+    createdAt: announcement.created_at,
+    batchId: announcement.batch_id || null
+  };
+}
+
 // -------------------------------------------------------------
 // Dynamic Homepage CMS Endpoints
 // -------------------------------------------------------------
@@ -1021,10 +1045,12 @@ app.put('/api/homepage', requireAdmin, async (req, res) => {
 // -------------------------------------------------------------
 app.get('/api/batches', async (req, res) => {
   try {
-    const { data, error } = await supabase
+    // Server-only client; explicitly expose active catalog metadata through mapBatch.
+    const { data, error } = await supabaseAdmin
       .from('batches')
       .select('*')
       .eq('category', 'MPPSC')
+      .eq('is_active', true)
       .order('created_at', { ascending: false });
 
     if (error) throw error;
@@ -1036,13 +1062,15 @@ app.get('/api/batches', async (req, res) => {
 
 app.get('/api/batches/:id', async (req, res) => {
   try {
-    const { data, error } = await supabase
+    const { data, error } = await supabaseAdmin
       .from('batches')
       .select('*')
       .eq('id', req.params.id)
-      .single();
+      .eq('is_active', true)
+      .maybeSingle();
 
     if (error) throw error;
+    if (!data) return res.status(404).json({ error: 'Batch not found.' });
     res.json(mapBatch(data));
   } catch (err: any) {
     res.status(500).json({ error: err.message });
@@ -1296,7 +1324,7 @@ app.post('/api/lectures', requireAdmin, async (req, res) => {
     const { data: chap } = await supabase.from('chapters').select('subject_id').eq('id', chapterId).single();
     const { data: subj } = await supabase.from('subjects').select('batch_id').eq('id', chap.subject_id).single();
 
-    const { data, error } = await supabase
+    const { data, error } = await getSupabaseAdmin()
       .from('lectures')
       .insert([{
         chapter_id: chapterId,
@@ -1321,7 +1349,15 @@ app.post('/api/lectures', requireAdmin, async (req, res) => {
 
 app.put('/api/lectures/:id', requireAdmin, async (req, res) => {
   try {
-    const { data, error } = await supabase
+    const admin = getSupabaseAdmin();
+    const { data: existingLecture, error: existingError } = await admin
+      .from('lectures')
+      .select('id, notes_url')
+      .eq('id', req.params.id)
+      .single();
+    if (existingError) throw existingError;
+
+    const { data, error } = await admin
       .from('lectures')
       .update({
         title: req.body.title,
@@ -1336,6 +1372,9 @@ app.put('/api/lectures/:id', requireAdmin, async (req, res) => {
       .single();
 
     if (error) throw error;
+    if (existingLecture.notes_url && existingLecture.notes_url !== data.notes_url) {
+      await deleteUnreferencedCourseAsset(existingLecture.notes_url, existingLecture.id);
+    }
     res.json(mapLecture(data));
   } catch (err: any) {
     res.status(500).json({ error: err.message });
@@ -1344,12 +1383,22 @@ app.put('/api/lectures/:id', requireAdmin, async (req, res) => {
 
 app.delete('/api/lectures/:id', requireAdmin, async (req, res) => {
   try {
-    const { error } = await supabase
+    const admin = getSupabaseAdmin();
+    const { data: existingLecture, error: existingError } = await admin
+      .from('lectures')
+      .select('id, notes_url')
+      .eq('id', req.params.id)
+      .single();
+    if (existingError) throw existingError;
+    const { error } = await admin
       .from('lectures')
       .delete()
       .eq('id', req.params.id);
 
     if (error) throw error;
+    if (existingLecture.notes_url) {
+      await deleteUnreferencedCourseAsset(existingLecture.notes_url, existingLecture.id);
+    }
     res.json({ message: 'Lecture deleted' });
   } catch (err: any) {
     res.status(500).json({ error: err.message });
@@ -1357,9 +1406,60 @@ app.delete('/api/lectures/:id', requireAdmin, async (req, res) => {
 });
 
 // -------------------------------------------------------------
-// announcements placeholder bypass
+// Course asset uploads (Supabase Storage)
 // -------------------------------------------------------------
-app.post('/api/upload', requireAdmin, (req: AuthenticatedRequest, res) => {
+const courseAssetTypes: Record<string, string> = {
+  '.pdf': 'application/pdf',
+  '.png': 'image/png',
+  '.jpg': 'image/jpeg',
+  '.jpeg': 'image/jpeg',
+  '.zip': 'application/zip'
+};
+const MAX_COURSE_ASSET_BYTES = 20 * 1024 * 1024;
+
+function getCourseAssetObjectPath(assetUrl: string): string | null {
+  try {
+    const url = new URL(assetUrl);
+    const prefix = '/storage/v1/object/public/course-assets/';
+    if (!url.pathname.startsWith(prefix)) return null;
+    return decodeURIComponent(url.pathname.slice(prefix.length));
+  } catch {
+    return null;
+  }
+}
+
+async function deleteUnreferencedCourseAsset(assetUrl: string, excludedLectureId: string): Promise<void> {
+  const objectPath = getCourseAssetObjectPath(assetUrl);
+  if (!objectPath) return;
+  try {
+    const admin = getSupabaseAdmin();
+    const { count, error: referenceError } = await admin
+      .from('lectures')
+      .select('id', { count: 'exact', head: true })
+      .eq('notes_url', assetUrl)
+      .neq('id', excludedLectureId);
+    if (referenceError) throw referenceError;
+    if ((count ?? 0) > 0) return;
+    const { error: removeError } = await admin.storage.from('course-assets').remove([objectPath]);
+    if (removeError) throw removeError;
+  } catch (error: any) {
+    // The lecture change has already succeeded; retain an orphan rather than
+    // failing a valid CMS action. The event is available for operator cleanup.
+    logSecurityEvent('ERROR', 'Course asset cleanup failed', { assetUrl, error: error.message });
+  }
+}
+
+function hasExpectedCourseAssetSignature(buffer: Buffer, mimeType: string): boolean {
+  if (mimeType === 'application/pdf') return buffer.subarray(0, 5).toString('ascii') === '%PDF-';
+  if (mimeType === 'image/png') return buffer.subarray(0, 8).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]));
+  if (mimeType === 'image/jpeg') return buffer.length >= 3 && buffer[0] === 0xff && buffer[1] === 0xd8 && buffer[2] === 0xff;
+  if (mimeType === 'application/zip') return buffer.subarray(0, 4).equals(Buffer.from([0x50, 0x4b, 0x03, 0x04]))
+    || buffer.subarray(0, 4).equals(Buffer.from([0x50, 0x4b, 0x05, 0x06]))
+    || buffer.subarray(0, 4).equals(Buffer.from([0x50, 0x4b, 0x07, 0x08]));
+  return false;
+}
+
+app.post('/api/upload', requireAdmin, async (req: AuthenticatedRequest, res) => {
   const { fileName, fileData } = req.body; // base64 encoded payload
   const ip = req.ip || (req.headers['x-forwarded-for'] as string) || 'unknown';
 
@@ -1368,43 +1468,51 @@ app.post('/api/upload', requireAdmin, (req: AuthenticatedRequest, res) => {
   }
 
   try {
-    // 1. Path Traversal Prevention: extract basename and sanitize special chars
+    // 1. Extract a safe extension; the Storage object name never uses user input.
     const baseName = path.basename(fileName);
     const sanitizedBase = baseName.replace(/[^a-zA-Z0-9.-]/g, '_');
-    
-    // 2. Strict Extension Check (Whitelisting)
     const ext = path.extname(sanitizedBase).toLowerCase();
-    const allowedExtensions = ['.pdf', '.png', '.jpg', '.jpeg', '.zip'];
-    
-    if (!allowedExtensions.includes(ext)) {
+    const expectedMimeType = courseAssetTypes[ext];
+    if (!expectedMimeType) {
       logSecurityEvent('WARN', 'Blocked upload attempt with insecure file extension', { fileName: baseName, ext, ip });
       return res.status(400).json({ error: 'File type blocked. Allowed types: PDF, PNG, JPG, JPEG, ZIP.' });
     }
 
-    // 3. Prevent overwriting system files
-    const safeName = `${Date.now()}_${crypto.randomBytes(4).toString('hex')}${ext}`;
-    const filePath = path.join(UPLOADS_DIR, safeName);
-    
-    // 4. Base64 validation and conversion
-    const parts = fileData.split(',');
-    const base64Data = parts[1] || parts[0];
-    
-    // Simple verification that base64 is format-valid
+    // 2. Accept only a well-formed Base64 data URI whose declared MIME type
+    // agrees with the filename extension.
+    const dataUriMatch = /^data:([^;,]+);base64,([A-Za-z0-9+/=\s]+)$/.exec(fileData);
+    if (!dataUriMatch || dataUriMatch[1] !== expectedMimeType) {
+      return res.status(400).json({ error: 'File content type does not match the filename extension.' });
+    }
     const base64Regex = /^([A-Za-z0-9+/]{4})*([A-Za-z0-9+/]{4}|[A-Za-z0-9+/]{3}=|[A-Za-z0-9+/]{2}==)$/;
-    const cleanBase64 = base64Data.replace(/\s/g, '');
-    if (cleanBase64.length > 0 && !base64Regex.test(cleanBase64)) {
+    const cleanBase64 = dataUriMatch[2].replace(/\s/g, '');
+    if (!cleanBase64 || !base64Regex.test(cleanBase64)) {
       return res.status(400).json({ error: 'Invalid base64 payload.' });
     }
-
     const buffer = Buffer.from(cleanBase64, 'base64');
+    if (!buffer.length || buffer.length > MAX_COURSE_ASSET_BYTES) {
+      return res.status(400).json({ error: 'File must be between 1 byte and 20 MiB.' });
+    }
+    if (!hasExpectedCourseAssetSignature(buffer, expectedMimeType)) {
+      return res.status(400).json({ error: 'File contents do not match the declared file type.' });
+    }
+
+    // 3. A server-only service key performs the Storage operation. Every
+    // object has an unguessable, immutable path and is read via its public URL.
+    const objectPath = `course-assets/${new Date().toISOString().slice(0, 10)}/${crypto.randomUUID()}${ext}`;
+    const storage = getSupabaseAdmin().storage.from('course-assets');
+    const { error: uploadError } = await storage.upload(objectPath, buffer, {
+      contentType: expectedMimeType,
+      cacheControl: '31536000',
+      upsert: false
+    });
+    if (uploadError) throw uploadError;
+    const { data: publicUrlData } = storage.getPublicUrl(objectPath);
+    const publicUrl = publicUrlData.publicUrl;
     
-    // Write the safe file to directory
-    fs.writeFileSync(filePath, buffer);
-    const relativeUrl = `/uploads/${safeName}`;
+    logSecurityEvent('INFO', 'File uploaded to Supabase Storage', { objectPath, uploader: req.user?.email, ip });
     
-    logSecurityEvent('INFO', 'File uploaded successfully', { safeName, url: relativeUrl, uploader: req.user?.email, ip });
-    
-    res.json({ url: relativeUrl, message: 'File uploaded successfully' });
+    res.status(201).json({ url: publicUrl, path: objectPath, message: 'File uploaded successfully' });
   } catch (err: any) {
     logSecurityEvent('ERROR', 'File upload failed', { error: err.message, ip });
     res.status(500).json({ error: 'Upload failed: ' + err.message });
@@ -1415,7 +1523,7 @@ app.post('/api/upload', requireAdmin, (req: AuthenticatedRequest, res) => {
 // -------------------------------------------------------------
 // Enrollments & Payments (Razorpay Mockup)
 // -------------------------------------------------------------
-app.get('/api/enrollments/:userId', requireAuth, (req: AuthenticatedRequest, res) => {
+app.get('/api/enrollments/:userId', requireAuth, async (req: AuthenticatedRequest, res) => {
   const { userId } = req.params;
   
   // Authorization check: User can only read their own enrollments, unless they are admin
@@ -1424,9 +1532,18 @@ app.get('/api/enrollments/:userId', requireAuth, (req: AuthenticatedRequest, res
     return res.status(403).json({ error: 'Access denied. You can only view your own enrollment record.' });
   }
 
-  const db = readDb();
-  const userEnrols = db.enrollments.filter(e => e.userId === userId);
-  res.json(userEnrols);
+  try {
+    const { data, error } = await getSupabaseAdmin()
+      .from('enrollments')
+      .select('*')
+      .eq('user_id', userId)
+      .eq('status', 'active')
+      .order('created_at', { ascending: false });
+    if (error) throw error;
+    res.json((data || []).map(mapEnrollment));
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
 // Manual enrollment or free enrollment
@@ -1440,37 +1557,29 @@ app.post('/api/enrollments', requireAuth, async (req: AuthenticatedRequest, res)
     return res.status(403).json({ error: 'Access denied. You cannot trigger enrollment for another user.' });
   }
 
-  const db = readDb();
-  // Check if already enrolled
-  const exists = db.enrollments.some(e => e.userId === userId && e.batchId === batchId);
-  if (exists) {
-    return res.status(400).json({ error: 'Already enrolled in this batch.' });
+  try {
+    const database = getSupabaseAdmin();
+    const { data: batch, error: batchError } = await database
+      .from('batches')
+      .select('id, is_paid, is_active')
+      .eq('id', batchId)
+      .single();
+    if (batchError || !batch) return res.status(404).json({ error: 'Batch not found.' });
+    if (batch.is_paid || !batch.is_active) {
+      return res.status(400).json({ error: 'Only active free batches can be enrolled through this endpoint.' });
+    }
+
+    const { data, error } = await database
+      .from('enrollments')
+      .insert({ user_id: userId, batch_id: batchId, access_type: 'free', status: 'active' })
+      .select()
+      .single();
+    if (error?.code === '23505') return res.status(400).json({ error: 'Already enrolled in this batch.' });
+    if (error) throw error;
+    res.json(mapEnrollment(data));
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
   }
-
-  // Verify batch existence in Supabase first, fallback to db.json
-  const { data: supabaseBatch } = await supabase.from('batches').select('id').eq('id', batchId).single();
-  const localBatch = db.batches.find(b => b.id === batchId);
-  if (!supabaseBatch && !localBatch) {
-    return res.status(404).json({ error: 'Batch not found' });
-  }
-
-  const newEnr: Enrollment = {
-    id: 'enr_' + crypto.randomBytes(5).toString('hex'),
-    userId,
-    batchId,
-    enrolledAt: new Date().toISOString()
-  };
-
-  db.enrollments.push(newEnr);
-  
-  // Increment batch enrol counts
-  const batchIdx = db.batches.findIndex(b => b.id === batchId);
-  if (batchIdx !== -1) {
-    db.batches[batchIdx].enrollmentCount += 1;
-  }
-
-  writeDb(db);
-  res.json(newEnr);
 });
 
 // Razorpay Order Mock
@@ -1488,7 +1597,7 @@ app.post('/api/payments/create-order', requireAuth, (req, res) => {
 });
 
 // Razorpay Payment Verification
-app.post('/api/payments/verify', requireAuth, (req: AuthenticatedRequest, res) => {
+app.post('/api/payments/verify', requireAuth, async (req: AuthenticatedRequest, res) => {
   const { userId, batchId, amount, razorpayOrderId, razorpayPaymentId, signature } = req.body;
   if (!userId || !batchId || !razorpayOrderId) {
     return res.status(400).json({ error: 'Missing verification data' });
@@ -1500,43 +1609,36 @@ app.post('/api/payments/verify', requireAuth, (req: AuthenticatedRequest, res) =
     return res.status(403).json({ error: 'Access denied. You cannot register payments for another user.' });
   }
 
-  const db = readDb();
-  
-  const payment: Payment = {
-    id: 'pay_' + crypto.randomBytes(5).toString('hex'),
-    userId,
-    batchId,
-    amount: Number(amount),
-    status: 'success',
-    razorpayOrderId,
-    razorpayPaymentId: razorpayPaymentId || 'pay_mock_' + crypto.randomBytes(5).toString('hex'),
-    createdAt: new Date().toISOString()
-  };
+  try {
+    const database = getSupabaseAdmin();
+    const { data: payment, error: paymentError } = await database
+      .from('payments')
+      .insert({
+        user_id: userId,
+        batch_id: batchId,
+        amount: Number(amount),
+        status: 'success',
+        payment_gateway: 'razorpay',
+        gateway_order_id: razorpayOrderId,
+        gateway_payment_id: razorpayPaymentId || null
+      })
+      .select()
+      .single();
+    if (paymentError) throw paymentError;
 
-  db.payments.push(payment);
+    const { error: enrollmentError } = await database
+      .from('enrollments')
+      .upsert({ user_id: userId, batch_id: batchId, access_type: 'paid', status: 'active' }, { onConflict: 'user_id,batch_id' });
+    if (enrollmentError) throw enrollmentError;
 
-  // Enroll student
-  const enrollmentExists = db.enrollments.some(e => e.userId === userId && e.batchId === batchId);
-  if (!enrollmentExists) {
-    db.enrollments.push({
-      id: 'enr_' + crypto.randomBytes(5).toString('hex'),
-      userId,
-      batchId,
-      enrolledAt: new Date().toISOString()
-    });
-
-    const batchIdx = db.batches.findIndex(b => b.id === batchId);
-    if (batchIdx !== -1) {
-      db.batches[batchIdx].enrollmentCount += 1;
-    }
+    logSecurityEvent('INFO', 'Mock payment recorded and batch enrollment registered', { paymentId: payment.id, userId, batchId, amount });
+    res.json({ success: true, payment: mapPayment(payment), message: 'Payment recorded. Razorpay signature verification will be enabled in Step 6.' });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
   }
-
-  writeDb(db);
-  logSecurityEvent('INFO', 'Payment verified and batch enrollment registered', { paymentId: payment.id, userId, batchId, amount });
-  res.json({ success: true, payment, message: 'Payment successfully verified. Batch enrolled!' });
 });
 
-app.get('/api/payments/history/:userId', requireAuth, (req: AuthenticatedRequest, res) => {
+app.get('/api/payments/history/:userId', requireAuth, async (req: AuthenticatedRequest, res) => {
   const { userId } = req.params;
 
   // Authorization check: User can only fetch their own payment ledger, unless they are admin
@@ -1545,22 +1647,35 @@ app.get('/api/payments/history/:userId', requireAuth, (req: AuthenticatedRequest
     return res.status(403).json({ error: 'Access denied. You can only view your own payment ledger.' });
   }
 
-  const db = readDb();
-  const history = db.payments.filter(p => p.userId === userId);
-  res.json(history);
+  try {
+    const { data, error } = await getSupabaseAdmin()
+      .from('payments')
+      .select('*')
+      .eq('user_id', userId)
+      .order('created_at', { ascending: false });
+    if (error) throw error;
+    res.json((data || []).map(mapPayment));
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
 // Admin payments overview
-app.get('/api/admin/payments', requireAdmin, (req, res) => {
-  const db = readDb();
-  res.json(db.payments);
+app.get('/api/admin/payments', requireAdmin, async (req, res) => {
+  try {
+    const { data, error } = await getSupabaseAdmin().from('payments').select('*').order('created_at', { ascending: false });
+    if (error) throw error;
+    res.json((data || []).map(mapPayment));
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
 
 // -------------------------------------------------------------
 // Progress & Streaks Endpoints
 // -------------------------------------------------------------
-app.get('/api/progress/:userId', requireAuth, (req: AuthenticatedRequest, res) => {
+app.get('/api/progress/:userId', requireAuth, async (req: AuthenticatedRequest, res) => {
   const { userId } = req.params;
 
   if (req.user?.id !== userId && req.user?.role !== 'admin') {
@@ -1568,12 +1683,20 @@ app.get('/api/progress/:userId', requireAuth, (req: AuthenticatedRequest, res) =
     return res.status(403).json({ error: 'Access denied. You can only query your own progress history.' });
   }
 
-  const db = readDb();
-  const prog = db.progress.filter(p => p.userId === userId);
-  res.json(prog);
+  try {
+    const { data, error } = await getSupabaseAdmin()
+      .from('lecture_progress')
+      .select('*')
+      .eq('user_id', userId)
+      .order('updated_at', { ascending: false });
+    if (error) throw error;
+    res.json((data || []).map(mapProgress));
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
-app.post('/api/progress', requireAuth, (req: AuthenticatedRequest, res) => {
+app.post('/api/progress', requireAuth, async (req: AuthenticatedRequest, res) => {
   const { userId, lectureId, completed, watchPercentage } = req.body;
   if (!userId || !lectureId) return res.status(400).json({ error: 'Missing userId or lectureId' });
 
@@ -1582,51 +1705,47 @@ app.post('/api/progress', requireAuth, (req: AuthenticatedRequest, res) => {
     return res.status(403).json({ error: 'Access denied. You cannot modify progress for another user.' });
   }
 
-  const db = readDb();
-  const idx = db.progress.findIndex(p => p.userId === userId && p.lectureId === lectureId);
+  try {
+    const database = getSupabaseAdmin();
+    const safePercentage = Math.max(0, Math.min(100, Math.round(Number(watchPercentage) || 0)));
+    const { error: progressError } = await database
+      .from('lecture_progress')
+      .upsert({
+        user_id: userId,
+        lecture_id: lectureId,
+        completed: Boolean(completed),
+        watch_percentage: safePercentage,
+        updated_at: new Date().toISOString()
+      }, { onConflict: 'user_id,lecture_id' });
+    if (progressError) throw progressError;
 
-  if (idx !== -1) {
-    db.progress[idx].completed = completed !== undefined ? Boolean(completed) : db.progress[idx].completed;
-    db.progress[idx].watchPercentage = watchPercentage !== undefined ? Number(watchPercentage) : db.progress[idx].watchPercentage;
-    db.progress[idx].lastWatchedAt = new Date().toISOString();
-  } else {
-    db.progress.push({
-      userId,
-      lectureId,
-      completed: Boolean(completed),
-      watchPercentage: Number(watchPercentage || 0),
-      lastWatchedAt: new Date().toISOString()
-    });
-  }
+    const today = new Date().toISOString().slice(0, 10);
+    const { data: existingStreak, error: streakReadError } = await database
+      .from('daily_streaks')
+      .select('*')
+      .eq('user_id', userId)
+      .maybeSingle();
+    if (streakReadError) throw streakReadError;
 
-  // Update Daily Streak
-  const todayStr = new Date().toISOString().split('T')[0];
-  const streakIdx = db.dailyStreaks.findIndex(s => s.userId === userId);
-  
-  if (streakIdx !== -1) {
-    const lastActive = db.dailyStreaks[streakIdx].lastActiveDate;
-    if (lastActive !== todayStr) {
+    if (!existingStreak) {
+      const { error } = await database.from('daily_streaks').insert({ user_id: userId, streak_count: 1, last_active_date: today });
+      if (error) throw error;
+    } else if (existingStreak.last_active_date !== today) {
       const yesterday = new Date();
-      yesterday.setDate(yesterday.getDate() - 1);
-      const yesterdayStr = yesterday.toISOString().split('T')[0];
-      
-      if (lastActive === yesterdayStr) {
-        db.dailyStreaks[streakIdx].streakCount += 1;
-      } else {
-        db.dailyStreaks[streakIdx].streakCount = 1; // reset if missed a day
-      }
-      db.dailyStreaks[streakIdx].lastActiveDate = todayStr;
+      yesterday.setUTCDate(yesterday.getUTCDate() - 1);
+      const yesterdayDate = yesterday.toISOString().slice(0, 10);
+      const nextCount = existingStreak.last_active_date === yesterdayDate ? existingStreak.streak_count + 1 : 1;
+      const { error } = await database
+        .from('daily_streaks')
+        .update({ streak_count: nextCount, last_active_date: today, updated_at: new Date().toISOString() })
+        .eq('user_id', userId);
+      if (error) throw error;
     }
-  } else {
-    db.dailyStreaks.push({
-      userId,
-      streakCount: 1,
-      lastActiveDate: todayStr
-    });
-  }
 
-  writeDb(db);
-  res.json({ success: true, message: 'Progress updated.' });
+    res.json({ success: true, message: 'Progress updated.' });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
 app.get('/api/progress/:userId/stats', requireAuth, async (req: AuthenticatedRequest, res) => {
@@ -1637,87 +1756,59 @@ app.get('/api/progress/:userId/stats', requireAuth, async (req: AuthenticatedReq
     return res.status(403).json({ error: 'Access denied. You can only query your own dashboard statistics.' });
   }
 
-  const db = readDb();
+  try {
+    const database = getSupabaseAdmin();
+    const { data: enrollments, error: enrollmentError } = await database
+      .from('enrollments').select('batch_id').eq('user_id', userId).eq('status', 'active');
+    if (enrollmentError) throw enrollmentError;
+    const batchIds = (enrollments || []).map(enrollment => enrollment.batch_id);
 
-  // Enrollments
-  const userEnrols = db.enrollments.filter(e => e.userId === userId);
-  const enrolledBatchIds = userEnrols.map(e => e.batchId);
-
-  // Count total lectures from Supabase
-  let sbLecturesCount = 0;
-  if (enrolledBatchIds.length > 0) {
-    try {
-      const { data: sbLectures } = await supabase
-        .from('lectures')
-        .select('id')
-        .in('batch_id', enrolledBatchIds);
-      if (sbLectures) {
-        sbLecturesCount = sbLectures.length;
-      }
-    } catch (err) {
-      console.error('Failed to query lectures from Supabase for stats:', err);
+    const [progressResult, streakResult, historyResult, lectureResult] = await Promise.all([
+      database.from('lecture_progress').select('*').eq('user_id', userId),
+      database.from('daily_streaks').select('streak_count').eq('user_id', userId).maybeSingle(),
+      database.from('watch_history').select('*').eq('user_id', userId).order('updated_at', { ascending: false }).limit(5),
+      batchIds.length ? database.from('lectures').select('id, title, batch_id').in('batch_id', batchIds) : Promise.resolve({ data: [], error: null })
+    ]);
+    if (progressResult.error || streakResult.error || historyResult.error || lectureResult.error) {
+      throw progressResult.error || streakResult.error || historyResult.error || lectureResult.error;
     }
+
+    const lectures = lectureResult.data || [];
+    const lectureById = new Map(lectures.map(lecture => [lecture.id, lecture]));
+    const usedBatchIds = [...new Set(lectures.map(lecture => lecture.batch_id))];
+    const { data: batches, error: batchesError } = usedBatchIds.length
+      ? await database.from('batches').select('id, title').in('id', usedBatchIds)
+      : { data: [], error: null };
+    if (batchesError) throw batchesError;
+    const batchTitleById = new Map((batches || []).map(batch => [batch.id, batch.title]));
+
+    const progress = progressResult.data || [];
+    const completedCount = progress.filter(item => item.completed).length;
+    const stats: DashboardStats = {
+      completedLectures: completedCount,
+      totalLectures: lectures.length,
+      overallProgress: lectures.length ? Math.round((completedCount / lectures.length) * 100) : 0,
+      learningHours: Number((completedCount * 0.8 + progress.length * 0.1).toFixed(1)),
+      dailyStreak: streakResult.data?.streak_count || 0,
+      watchHistory: (historyResult.data || []).map(item => {
+        const lecture = lectureById.get(item.lecture_id);
+        return {
+          lectureId: item.lecture_id,
+          batchTitle: lecture ? batchTitleById.get(lecture.batch_id) || 'Academy Core' : 'Academy Core',
+          lectureTitle: lecture?.title || 'Academy Lecture',
+          playbackTime: item.playback_seconds,
+          updatedAt: item.updated_at
+        };
+      })
+    };
+    res.json(stats);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
   }
-
-  // Lectures in enrolled batches (local db.json fallback)
-  const enrolledSubjects = db.subjects.filter(s => enrolledBatchIds.includes(s.batchId));
-  const enrolledSubjIds = enrolledSubjects.map(s => s.id);
-  const enrolledChapters = db.chapters.filter(c => enrolledSubjIds.includes(c.subjectId));
-  const enrolledChapIds = enrolledChapters.map(c => c.id);
-  const localLecturesCount = db.lectures.filter(l => enrolledChapIds.includes(l.chapterId)).length;
-
-  const totalLecturesCount = sbLecturesCount + localLecturesCount;
-
-  // Completed Lectures
-  const userProgress = db.progress.filter(p => p.userId === userId);
-  const completedCount = userProgress.filter(p => p.completed).length;
-
-  // Streak
-  const streak = db.dailyStreaks.find(s => s.userId === userId)?.streakCount || 0;
-
-  // Simulated learning hours based on completed lectures (e.g., 0.75 hours per lecture)
-  const learningHours = Number((completedCount * 0.8 + userProgress.length * 0.1).toFixed(1));
-
-  // Compose Watch History with Batch/Lecture Details
-  const historyWithDetails = db.watchHistory
-    .filter(h => h.userId === userId)
-    .map(hist => {
-      const lec = db.lectures.find(l => l.id === hist.lectureId);
-      let batchTitle = 'Academy Core';
-      let lectureTitle = 'Academy Lecture';
-      if (lec) {
-        lectureTitle = lec.title;
-        const chap = db.chapters.find(c => c.id === lec.chapterId);
-        const subj = db.subjects.find(s => s.id === (chap?.subjectId || ''));
-        const batch = db.batches.find(b => b.id === (subj?.batchId || ''));
-        if (batch) {
-          batchTitle = batch.title;
-        }
-      }
-      return {
-        lectureId: hist.lectureId,
-        batchTitle,
-        lectureTitle,
-        playbackTime: hist.playbackTime,
-        updatedAt: hist.updatedAt
-      };
-    })
-    .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime());
-
-  const stats: DashboardStats = {
-    completedLectures: completedCount,
-    totalLectures: totalLecturesCount || 10, // Avoid 0 denominator
-    overallProgress: totalLecturesCount > 0 ? Math.round((completedCount / totalLecturesCount) * 100) : 0,
-    learningHours,
-    dailyStreak: streak,
-    watchHistory: historyWithDetails.slice(0, 5) // Last 5
-  };
-
-  res.json(stats);
 });
 
 // Watch history updates
-app.post('/api/watch-history', requireAuth, (req: AuthenticatedRequest, res) => {
+app.post('/api/watch-history', requireAuth, async (req: AuthenticatedRequest, res) => {
   const { userId, lectureId, playbackTime } = req.body;
   if (!userId || !lectureId) return res.status(400).json({ error: 'Missing parameters' });
 
@@ -1726,94 +1817,90 @@ app.post('/api/watch-history', requireAuth, (req: AuthenticatedRequest, res) => 
     return res.status(403).json({ error: 'Access denied. You cannot modify playback history for another user.' });
   }
 
-  const db = readDb();
-  const idx = db.watchHistory.findIndex(h => h.userId === userId && h.lectureId === lectureId);
-
-  if (idx !== -1) {
-    db.watchHistory[idx].playbackTime = Number(playbackTime);
-    db.watchHistory[idx].updatedAt = new Date().toISOString();
-  } else {
-    db.watchHistory.push({
-      userId,
-      lectureId,
-      playbackTime: Number(playbackTime),
-      updatedAt: new Date().toISOString()
-    });
+  try {
+    const { error } = await getSupabaseAdmin().from('watch_history').upsert({
+      user_id: userId,
+      lecture_id: lectureId,
+      playback_seconds: Math.max(0, Math.round(Number(playbackTime) || 0)),
+      updated_at: new Date().toISOString()
+    }, { onConflict: 'user_id,lecture_id' });
+    if (error) throw error;
+    res.json({ success: true });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
   }
-
-  writeDb(db);
-  res.json({ success: true });
 });
 
 
 // -------------------------------------------------------------
 // Announcements Endpoints
 // -------------------------------------------------------------
-app.get('/api/announcements', (req, res) => {
-  const db = readDb();
-  res.json(db.announcements.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()));
+app.get('/api/announcements', async (req, res) => {
+  try {
+    const { data, error } = await getSupabaseAdmin().from('announcements').select('*').order('created_at', { ascending: false });
+    if (error) throw error;
+    res.json((data || []).map(mapAnnouncement));
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
-app.post('/api/announcements', requireAdmin, (req, res) => {
+app.post('/api/announcements', requireAdmin, async (req: AuthenticatedRequest, res) => {
   const { title, content, type, batchId, authorId } = req.body;
   if (!title || !content || !type) {
     return res.status(400).json({ error: 'Missing announcement parameters' });
   }
 
-  const db = readDb();
-  const newAnn: Announcement = {
-    id: 'ann_' + crypto.randomBytes(5).toString('hex'),
-    title,
-    content,
-    type,
-    authorId: authorId || 'usr_admin',
-    createdAt: new Date().toISOString(),
-    batchId: batchId || null
-  };
-
-  db.announcements.push(newAnn);
-  writeDb(db);
-  res.json(newAnn);
+  try {
+    const { data, error } = await getSupabaseAdmin().from('announcements').insert({
+      title,
+      message: content,
+      type,
+      batch_id: batchId || null,
+      created_by: req.user?.id || authorId || null
+    }).select().single();
+    if (error) throw error;
+    res.json(mapAnnouncement(data));
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
-app.delete('/api/announcements/:id', requireAdmin, (req, res) => {
-  const db = readDb();
-  db.announcements = db.announcements.filter(a => a.id !== req.params.id);
-  writeDb(db);
-  res.json({ message: 'Announcement deleted' });
+app.delete('/api/announcements/:id', requireAdmin, async (req, res) => {
+  try {
+    const { error } = await getSupabaseAdmin().from('announcements').delete().eq('id', req.params.id);
+    if (error) throw error;
+    res.json({ message: 'Announcement deleted' });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
 
 // -------------------------------------------------------------
 // Global Search
 // -------------------------------------------------------------
-app.get('/api/search', (req, res) => {
-  const query = (req.query.q as string || '').toLowerCase();
+app.get('/api/search', async (req, res) => {
+  const query = (req.query.q as string || '').trim();
   if (!query) return res.json({ batches: [], subjects: [], lectures: [] });
 
-  const db = readDb();
-  
-  const matchesBatch = db.batches.filter(b => 
-    b.title.toLowerCase().includes(query) || 
-    b.description.toLowerCase().includes(query) ||
-    b.instructor.toLowerCase().includes(query)
-  );
-
-  const matchesSubj = db.subjects.filter(s => 
-    s.title.toLowerCase().includes(query) || 
-    s.description.toLowerCase().includes(query)
-  );
-
-  const matchesLec = db.lectures.filter(l => 
-    l.title.toLowerCase().includes(query) || 
-    l.description.toLowerCase().includes(query)
-  );
-
-  res.json({
-    batches: matchesBatch,
-    subjects: matchesSubj,
-    lectures: matchesLec
-  });
+  try {
+    const pattern = `%${query.replace(/[%_]/g, '\\$&')}%`;
+    const database = getSupabaseAdmin();
+    const [batches, subjects, lectures] = await Promise.all([
+      database.from('batches').select('*').or(`title.ilike.${pattern},description.ilike.${pattern},instructor.ilike.${pattern}`).limit(20),
+      database.from('subjects').select('*').or(`title.ilike.${pattern},description.ilike.${pattern}`).limit(20),
+      database.from('lectures').select('*').or(`title.ilike.${pattern},description.ilike.${pattern}`).limit(20)
+    ]);
+    if (batches.error || subjects.error || lectures.error) throw batches.error || subjects.error || lectures.error;
+    res.json({
+      batches: (batches.data || []).map(mapBatch),
+      subjects: (subjects.data || []).map(mapSubject),
+      lectures: (lectures.data || []).map(mapLecture)
+    });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
 

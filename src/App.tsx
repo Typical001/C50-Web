@@ -65,6 +65,7 @@ export default function App() {
   const [faculties, setFaculties] = useState<{ name: string; role: string; bio: string; imageUrl?: string }[]>([]);
   const [enrolledBatchIds, setEnrolledBatchIds] = useState<string[]>([]);
   const [loadingBatches, setLoadingBatches] = useState(true);
+  const [batchesError, setBatchesError] = useState('');
   const [showHero, setShowHero] = useState(true);
   const [showFaculty, setShowFaculty] = useState(true);
   const [showTestimonials, setShowTestimonials] = useState(true);
@@ -225,11 +226,16 @@ export default function App() {
   const loadBatches = async () => {
     try {
       setLoadingBatches(true);
+      setBatchesError('');
       const res = await fetch('/api/batches');
       const data = await res.json();
+      if (!res.ok || !Array.isArray(data)) {
+        throw new Error('Could not load courses. Please try again.');
+      }
       setBatches(data);
     } catch (err) {
       console.error('Failed to fetch batches:', err);
+      setBatchesError('Could not load courses. Please try again.');
     } finally {
       setLoadingBatches(false);
     }
@@ -840,6 +846,14 @@ export default function App() {
 
       {/* Main Workspace Frame container */}
       <main className="flex-grow pt-12">
+        {batchesError && (
+          <div role="alert" className="mx-auto max-w-7xl rounded-xl bg-red-50 p-4 text-red-700">
+            {batchesError}
+            <button onClick={loadBatches} disabled={loadingBatches} className="ml-3 font-semibold underline">
+              Retry
+            </button>
+          </div>
+        )}
         <AnimatePresence mode="wait">
           <motion.div
             key={currentView}

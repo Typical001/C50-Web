@@ -278,10 +278,19 @@ export default function AdminDashboard({ batches, onRefreshBatches, userId }: Ad
     }
   };
 
-  // Base64 File Uploader implementation
+  // Storage-backed PDF uploader. Base64 is retained for this legacy form;
+  // the API validates the decoded file before sending it to Supabase Storage.
   const handlePdfUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
+    if (file.type !== 'application/pdf' || !file.name.toLowerCase().endsWith('.pdf')) {
+      alert('Please select a PDF file.');
+      return;
+    }
+    if (file.size > 20 * 1024 * 1024) {
+      alert('PDF files must be 20 MiB or smaller.');
+      return;
+    }
 
     setUploadingPdf(true);
     const reader = new FileReader();
@@ -290,19 +299,26 @@ export default function AdminDashboard({ batches, onRefreshBatches, userId }: Ad
       try {
         const res = await fetch('/api/upload', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${localStorage.getItem('aura_session_token') || ''}`
+          },
           body: JSON.stringify({
             fileName: file.name,
             fileData
           })
         });
         const uploadResponse = await res.json();
+        if (!res.ok) {
+          throw new Error(uploadResponse.error || 'Upload failed');
+        }
         if (uploadResponse.url) {
           setLectureNotesUrl(uploadResponse.url);
           setLectureNotesTitle(file.name.replace('.pdf', '') + ' Class Notes');
         }
       } catch (err) {
         console.error('File upload failed:', err);
+        alert(err instanceof Error ? err.message : 'File upload failed.');
       } finally {
         setUploadingPdf(false);
       }

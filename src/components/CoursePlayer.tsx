@@ -720,7 +720,9 @@ export default function CoursePlayer({ batchId, batchTitle, userId, onBack }: Co
               <div className="space-y-4">
                 {activeLecture.attachments && activeLecture.attachments.length > 0 ? (
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    {activeLecture.attachments.map((file, idx) => (
+                    {activeLecture.attachments.map((file, idx) => {
+                      const attachmentUrl = /^https?:\/\//i.test(file) ? file : null;
+                      return (
                       <div key={idx} className="p-4 border border-gray-100 rounded-2xl flex items-center justify-between hover:bg-gray-50 transition-colors">
                         <div className="flex items-center gap-3">
                           <div className="p-2.5 bg-[#0071e3]/10 text-[#0071e3] rounded-xl">
@@ -731,15 +733,14 @@ export default function CoursePlayer({ batchId, batchTitle, userId, onBack }: Co
                             <p className="text-[10px] text-gray-400">Additional Handout</p>
                           </div>
                         </div>
-                        <a
-                          href={`/uploads/${file}`}
-                          download
-                          className="text-xs font-bold text-[#0071e3] hover:underline"
-                        >
-                          Download
-                        </a>
+                        {attachmentUrl ? (
+                          <a href={attachmentUrl} download className="text-xs font-bold text-[#0071e3] hover:underline">Download</a>
+                        ) : (
+                          <span className="text-xs text-gray-400" title="This legacy local attachment is no longer available">Unavailable</span>
+                        )}
                       </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 ) : (
                   <div className="text-center py-10 text-gray-400 text-sm">
