@@ -46,6 +46,8 @@ export default function AdminDashboard({ batches, onRefreshBatches, userId }: Ad
     tags: '',
     category: 'Competitive Exams',
     isFree: false,
+    paymentEnabled: false,
+    razorpayPaymentButtonId: '',
     thumbnailUrl: '',
     bannerUrl: ''
   });
@@ -129,7 +131,10 @@ export default function AdminDashboard({ batches, onRefreshBatches, userId }: Ad
   const loadSyllabus = async (bId: string) => {
     try {
       setLoading(true);
-      const res = await fetch(`/api/batches/${bId}/structure`);
+      const res = await fetch(`/api/batches/${bId}/structure`, {
+        headers: { Authorization: `Bearer ${localStorage.getItem('aura_session_token') || ''}` }
+      });
+      if (!res.ok) throw new Error('Unable to load batch structure. Please sign in again.');
       const data = await res.json();
       setSyllabusStructure(data);
     } catch (err) {
@@ -155,9 +160,10 @@ export default function AdminDashboard({ batches, onRefreshBatches, userId }: Ad
 
       const res = await fetch(url, {
         method,
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${localStorage.getItem('aura_session_token') || ''}` },
         body: JSON.stringify(payload)
       });
+      if (!res.ok) { const data = await res.json(); throw new Error(data.error || 'Batch save failed.'); }
 
       if (res.ok) {
         setShowBatchForm(false);
@@ -167,6 +173,7 @@ export default function AdminDashboard({ batches, onRefreshBatches, userId }: Ad
       }
     } catch (err) {
       console.error('Error saving batch:', err);
+      alert(err instanceof Error ? err.message : 'Batch save failed.');
     }
   };
 
@@ -184,6 +191,8 @@ export default function AdminDashboard({ batches, onRefreshBatches, userId }: Ad
       tags: batch.tags.join(', '),
       category: batch.category,
       isFree: batch.isFree,
+      paymentEnabled: Boolean(batch.paymentEnabled),
+      razorpayPaymentButtonId: batch.razorpayPaymentButtonId || '',
       thumbnailUrl: batch.thumbnailUrl,
       bannerUrl: batch.bannerUrl
     });
@@ -218,6 +227,8 @@ export default function AdminDashboard({ batches, onRefreshBatches, userId }: Ad
       tags: '',
       category: 'Competitive Exams',
       isFree: false,
+      paymentEnabled: false,
+      razorpayPaymentButtonId: '',
       thumbnailUrl: '',
       bannerUrl: ''
     });
@@ -607,6 +618,7 @@ export default function AdminDashboard({ batches, onRefreshBatches, userId }: Ad
                       setBatchForm({
                         ...batchForm,
                         isFree: checked,
+                        paymentEnabled: checked ? false : batchForm.paymentEnabled,
                         price: checked ? '0' : batchForm.price,
                         discountPrice: checked ? '0' : batchForm.discountPrice
                       });
@@ -618,6 +630,14 @@ export default function AdminDashboard({ batches, onRefreshBatches, userId }: Ad
                   </label>
                 </div>
 
+                <div className="col-span-1 md:col-span-2 space-y-3 rounded-xl bg-indigo-50 p-4">
+                  <p className="font-semibold">{batchForm.isFree ? 'Free Batch' : 'Paid Batch'}</p>
+                  <label className="flex gap-2"><input type="checkbox" checked={batchForm.paymentEnabled} disabled={batchForm.isFree} onChange={e => setBatchForm({ ...batchForm, paymentEnabled: e.target.checked })} /> Payment Enabled</label>
+                  <label className="block text-sm">Razorpay Payment Button ID (reference only)
+                    <input className="mt-1 w-full rounded-lg border p-2" placeholder="pl_xxxxx" value={batchForm.razorpayPaymentButtonId} onChange={e => setBatchForm({ ...batchForm, razorpayPaymentButtonId: e.target.value })} />
+                  </label>
+                  <p className="text-xs text-gray-600">Purchases use Orders + Checkout. No secret keys or embed HTML. Enable after test-mode rollout checks.</p>
+                </div>
                 <div className="col-span-1 md:col-span-2 flex justify-end gap-3 pt-4 border-t border-gray-100">
                   <button
                     type="button"

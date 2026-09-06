@@ -57,6 +57,7 @@ const getEmbedUrl = (url: string) => {
 export default function CoursePlayer({ batchId, batchTitle, userId, onBack }: CoursePlayerProps) {
   const [structure, setStructure] = useState<StructureSubject[]>([]);
   const [loading, setLoading] = useState(true);
+  const [accessError, setAccessError] = useState('');
   const [progressState, setProgressState] = useState<Record<string, boolean>>({});
 
   // Internal navigation state
@@ -73,8 +74,13 @@ export default function CoursePlayer({ batchId, batchTitle, userId, onBack }: Co
     async function loadStructure() {
       try {
         setLoading(true);
-        const res = await fetch(`/api/batches/${batchId}/structure`);
+        setAccessError('');
+        setStructure([]);
+        const res = await fetch(`/api/batches/${batchId}/structure`, {
+          headers: { Authorization: `Bearer ${localStorage.getItem('aura_session_token') || ''}` }
+        });
         const structData = await res.json();
+        if (!res.ok) throw new Error(structData.error || 'Unable to verify course access.');
         
         if (Array.isArray(structData)) {
           setStructure(structData);
@@ -99,6 +105,7 @@ export default function CoursePlayer({ batchId, batchTitle, userId, onBack }: Co
         }
       } catch (err) {
         console.error('Error loading course structure:', err);
+        setAccessError(err instanceof Error ? err.message : 'Unable to load course.');
       } finally {
         setLoading(false);
       }
@@ -232,6 +239,10 @@ export default function CoursePlayer({ batchId, batchTitle, userId, onBack }: Co
   };
 
   // ── Loading State ──────────────────────────────────────────────
+
+  if (!loading && accessError) {
+    return <div className="p-8 text-center" role="alert"><p>{accessError}</p><button onClick={onBack} className="mt-4 underline">Back to batches</button></div>;
+  }
 
   if (loading) {
     return (

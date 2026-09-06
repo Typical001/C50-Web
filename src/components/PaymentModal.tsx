@@ -1,372 +1,105 @@
-import React, { useState } from 'react';
-import { 
-  X, CreditCard, Shield, Landmark, PhoneCall, Sparkles, 
-  ChevronRight, ArrowRight, CheckCircle, Loader2
-} from 'lucide-react';
-import { Batch } from '../types';
+import { useEffect, useRef, useState } from 'react';
+import { X, Shield, Loader2, CheckCircle } from 'lucide-react';
+import type { Batch } from '../types';
+import { confirmedAccess, createPurchase, verifyPurchase, loadCheckout, paymentRequest, type CheckoutInstance, type CheckoutResponse, type PaymentStatus } from '../lib/paymentClient';
 
-interface PaymentModalProps {
-  batch: Batch;
-  userId: string;
-  onClose: () => void;
-  onPaymentSuccess: () => void;
-}
-
-export default function PaymentModal({ batch, userId, onClose, onPaymentSuccess }: PaymentModalProps) {
-  const [paymentStep, setPaymentStep] = useState<'methods' | 'cardForm' | 'upiForm' | 'processing' | 'success'>('methods');
-  const [cardNo, setCardNo] = useState('');
-  const [cardExpiry, setCardExpiry] = useState('');
-  const [cardCvv, setCardCvv] = useState('');
-  const [upiId, setUpiId] = useState('');
-  const [errorMessage, setErrorMessage] = useState('');
-
-  // Form input triggers
-  const formatCardNo = (val: string) => {
-    const raw = val.replace(/\s?/g, '').replace(/[^0-9]/g, '');
-    const groups = raw.match(/.{1,4}/g);
-    return groups ? groups.join(' ').substring(0, 19) : raw;
-  };
-
-  const handleCardNoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setCardNo(formatCardNo(e.target.value));
-  };
-
-  const formatExpiry = (val: string) => {
-    const raw = val.replace(/\//g, '').replace(/[^0-9]/g, '');
-    if (raw.length >= 2) {
-      return raw.substring(0, 2) + '/' + raw.substring(2, 4);
-    }
-    return raw;
-  };
-
-  // Payment Verification API call
-  const triggerPaymentVerification = async () => {
-    setPaymentStep('processing');
-    setErrorMessage('');
-
+interface Props { key?: string; batch: Batch; userId: string; onClose(): void; onPaymentSuccess(): Promise<void>; }
+export default function PaymentModal({ batch, userId, onClose, onPaymentSuccess }: Props) {
+  const storageKey = `c50_pending_purchase:${userId}:${batch.id}`;
+  const [paymentId, setPaymentId] = useState(() => sessionStorage.getItem(storageKey) || '');
+  const [phase, setPhase] = useState<'ready' | 'busy' | 'pending' | 'success' | 'unavailable' | 'failed'>(() => sessionStorage.getItem(storageKey) ? 'pending' : 'ready');
+  const [error, setError] = useState('');
+  const [received, setReceived] = useState(false);
+  const [amount, setAmount] = useState(batch.discountPrice > 0 ? batch.discountPrice : batch.price);
+  const [polls, setPolls] = useState(0);
+  const mounted = useRef(true), checking = useRef(false), starting = useRef(false);
+  const checkout = useRef<CheckoutInstance | null>(null);
+  useEffect(() => { mounted.current = true; return () => { mounted.current = false; checkout.current?.close(); }; }, []);
+  function accept(result: PaymentStatus, id: string) {
+    if (!mounted.current) return;
+    if (result.paymentId !== id || result.batchId !== batch.id) throw new Error('Payment confirmation did not match this batch.');
+    if (confirmedAccess(result, batch.id, id)) {
+      sessionStorage.removeItem(storageKey); setPhase('success'); setError('');
+    } else if (result.status === 'success') {
+      setPhase('unavailable'); setError('Payment verified, but course access is currently unavailable. Please contact support.');
+    } else if (result.status === 'failed') {
+      sessionStorage.removeItem(storageKey); setPhase('failed'); setError('Payment failed. No course access was granted. You can retry.');
+    } else { setPhase('pending'); }
+  }
+  async function check(id = paymentId) {
+    if (!id || checking.current) return;
+    checking.current = true;
+    try { accept(await paymentRequest(`/api/payments/${id}/status`), id); }
+    catch (err) { if (mounted.current) setError(err instanceof Error ? err.message : 'Confirmation unavailable. Please check again.'); }
+    finally { checking.current = false; }
+  }
+  useEffect(() => {
+    if (phase !== 'pending' || !paymentId || polls >= 12) return;
+    const timer = setTimeout(() => { setPolls(n => n + 1); void check(); }, 5000);
+    return () => clearTimeout(timer);
+  }, [phase, paymentId, polls]);
+  async function begin() {
+    if (starting.current) return;
+    starting.current = true; setPhase('busy'); setError('');
     try {
-      const token = localStorage.getItem('aura_session_token');
-      
-      // Step 1: Create Razorpay Order ID on server
-      const orderRes = await fetch('/api/payments/create-order', {
-        method: 'POST',
-        headers: { 
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
+      const order = await createPurchase(batch.id);
+      if (!order.paymentId || !order.orderId || !order.keyId || order.currency !== 'INR' || !Number.isSafeInteger(order.amount) || order.amount <= 0) throw new Error('Invalid checkout order.');
+      sessionStorage.setItem(storageKey, order.paymentId); setPaymentId(order.paymentId); setAmount(order.amount / 100);
+      await loadCheckout();
+      if (!mounted.current) return;
+      let callbackReceived = false;
+      const Razorpay = window.Razorpay!;
+      checkout.current = new Razorpay({
+        key: order.keyId, order_id: order.orderId, amount: order.amount, currency: order.currency,
+        name: 'C50 Academy', description: batch.title, theme: { color: '#6D5DF6' },
+        handler: async (response: CheckoutResponse) => {
+          callbackReceived = true;
+          if (!mounted.current) return;
+          setReceived(true); setPhase('busy');
+          try {
+            accept(await verifyPurchase(response), order.paymentId);
+          } catch {
+            if (mounted.current) { setPhase('pending'); setPolls(0); setError('Server confirmation is still pending. Do not pay again.'); }
+          }
         },
-        body: JSON.stringify({
-          batchId: batch.id,
-          amount: batch.discountPrice
-        })
+        modal: { ondismiss: () => {
+          if (!mounted.current || callbackReceived) return;
+          setPhase('pending'); setPolls(0); setError('Checkout closed. Check payment status before retrying if money was debited.');
+        } }
       });
-      const orderData = await orderRes.json();
-      const razorpayOrderId = orderData.id;
-
-      // Step 2: Simulate Razorpay Gateway transaction delay (1.5 seconds)
-      await new Promise((resolve) => setTimeout(resolve, 1500));
-
-      // Step 3: Verify simulated signature on backend to process enrollment
-      const verifyRes = await fetch('/api/payments/verify', {
-        method: 'POST',
-        headers: { 
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
-        body: JSON.stringify({
-          userId,
-          batchId: batch.id,
-          amount: batch.discountPrice,
-          razorpayOrderId,
-          razorpayPaymentId: 'pay_rzp_mock_' + Math.random().toString(36).substr(2, 10),
-          signature: 'sig_hmac_sha256_mock_hash_verification_success'
-        })
+      checkout.current.on('payment.failed', () => {
+        if (mounted.current) setError('This payment attempt failed. You can retry inside Razorpay or close it to check status.');
       });
-
-      const verifyData = await verifyRes.json();
-
-      if (verifyData.success) {
-        setPaymentStep('success');
-        // Let user see success modal briefly, then invoke callback
-        setTimeout(() => {
-          onPaymentSuccess();
-          onClose();
-        }, 1800);
-      } else {
-        setPaymentStep('methods');
-        setErrorMessage(verifyData.error || 'Signature verification failed.');
-      }
+      checkout.current.open();
     } catch (err) {
-      console.error('Error verifying payments transaction:', err);
-      setPaymentStep('methods');
-      setErrorMessage('Server-side verification crashed. Please try again.');
-    }
-  };
-
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-fadeIn">
-      {/* Razorpay UI Wrapper */}
-      <div className="relative w-full max-w-md bg-[#1d1d1f] rounded-3xl overflow-hidden shadow-[0_24px_50px_-12px_rgba(0,0,0,0.5)] border border-white/5 flex flex-col text-white">
-        
-        {/* Modal Close */}
-        <button
-          onClick={onClose}
-          className="absolute top-5 right-5 p-2 bg-white/10 hover:bg-white/20 text-white rounded-full transition-all cursor-pointer outline-none z-10"
-        >
-          <X className="w-4 h-4" />
-        </button>
-
-        {/* Razorpay Header banner */}
-        <div className="bg-gradient-to-r from-blue-700 to-indigo-800 p-6 flex items-center gap-3 border-b border-white/5">
-          <div className="p-2.5 bg-white/10 rounded-2xl">
-            <Shield className="w-6 h-6 text-white" />
-          </div>
-          <div>
-            <div className="flex items-center gap-1">
-              <span className="text-xs font-semibold text-blue-200">SECURE BILLING</span>
-              <Sparkles className="w-3.5 h-3.5 text-blue-300" />
-            </div>
-            <h3 className="text-base font-bold tracking-tight">Razorpay Secure Checkout</h3>
-          </div>
-        </div>
-
-        {/* Course Details summary in Modal */}
-        <div className="bg-white/5 px-6 py-4 border-b border-white/5 text-xs flex justify-between items-center">
-          <div>
-            <p className="font-semibold text-gray-400">ENROLLING IN</p>
-            <p className="font-bold text-white max-w-[200px] truncate mt-0.5">{batch.title}</p>
-          </div>
-          <div className="text-right">
-            <p className="font-semibold text-gray-400">TOTAL COST</p>
-            <p className="text-base font-extrabold text-blue-400 mt-0.5">₹{batch.discountPrice}</p>
-          </div>
-        </div>
-
-        {/* Error State */}
-        {errorMessage && (
-          <div className="mx-6 mt-4 p-3.5 bg-red-500/10 border border-red-500/20 text-red-400 rounded-xl text-xs flex items-center gap-2">
-            <X className="w-4 h-4 shrink-0" />
-            <span>{errorMessage}</span>
-          </div>
-        )}
-
-        {/* Dynamic Step Content */}
-        <div className="p-6 flex-grow min-h-[250px]">
-          
-          {/* STEP 1: SELECT METHOD */}
-          {paymentStep === 'methods' && (
-            <div className="space-y-4">
-              <h4 className="text-xs font-extrabold uppercase text-gray-400 tracking-wider">Select Payment Mode</h4>
-
-              <div className="space-y-3.5">
-                {/* Method Card */}
-                <button
-                  id="pay-card-select-btn"
-                  onClick={() => setPaymentStep('cardForm')}
-                  className="w-full p-4 bg-white/5 hover:bg-white/10 border border-white/5 hover:border-blue-500/50 rounded-2xl flex items-center justify-between text-left transition-all cursor-pointer outline-none"
-                >
-                  <div className="flex items-center gap-3.5">
-                    <div className="p-2.5 bg-blue-500/15 text-blue-400 rounded-xl">
-                      <CreditCard className="w-5 h-5" />
-                    </div>
-                    <div>
-                      <p className="text-sm font-bold text-white">Credit or Debit Card</p>
-                      <p className="text-[10px] text-gray-400">Visa, MasterCard, RuPay, Maestro</p>
-                    </div>
-                  </div>
-                  <ChevronRight className="w-4 h-4 text-gray-500" />
-                </button>
-
-                {/* Method UPI */}
-                <button
-                  id="pay-upi-select-btn"
-                  onClick={() => setPaymentStep('upiForm')}
-                  className="w-full p-4 bg-white/5 hover:bg-white/10 border border-white/5 hover:border-blue-500/50 rounded-2xl flex items-center justify-between text-left transition-all cursor-pointer outline-none"
-                >
-                  <div className="flex items-center gap-3.5">
-                    <div className="p-2.5 bg-emerald-500/15 text-emerald-400 rounded-xl">
-                      <Landmark className="w-5 h-5" />
-                    </div>
-                    <div>
-                      <p className="text-sm font-bold text-white">UPI Instant Transfer</p>
-                      <p className="text-[10px] text-gray-400">Google Pay, PhonePe, Paytm, bhim</p>
-                    </div>
-                  </div>
-                  <ChevronRight className="w-4 h-4 text-gray-500" />
-                </button>
-
-                {/* Method NetBanking Simulator */}
-                <button
-                  id="pay-netbank-select-btn"
-                  onClick={triggerPaymentVerification}
-                  className="w-full p-4 bg-white/5 hover:bg-white/10 border border-white/5 hover:border-blue-500/50 rounded-2xl flex items-center justify-between text-left transition-all cursor-pointer outline-none"
-                >
-                  <div className="flex items-center gap-3.5">
-                    <div className="p-2.5 bg-amber-500/15 text-amber-400 rounded-xl">
-                      <Landmark className="w-5 h-5" />
-                    </div>
-                    <div>
-                      <p className="text-sm font-bold text-white">Express NetBanking Simulator</p>
-                      <p className="text-[10px] text-gray-400">Direct simulated checkout click</p>
-                    </div>
-                  </div>
-                  <ChevronRight className="w-4 h-4 text-gray-500" />
-                </button>
-              </div>
-            </div>
-          )}
-
-          {/* STEP 2: CREDIT CARD DETAILS */}
-          {paymentStep === 'cardForm' && (
-            <div className="space-y-5 animate-slideIn">
-              <h4 className="text-xs font-extrabold uppercase text-gray-400 tracking-wider">Card Details</h4>
-
-              <div className="space-y-4 text-xs">
-                <div className="space-y-1.5">
-                  <label className="font-bold text-gray-400">Cardholder Name</label>
-                  <input
-                    type="text"
-                    required
-                    placeholder="Arjun Kumar"
-                    className="w-full px-4 py-2.5 bg-white/5 border border-white/10 rounded-xl outline-none focus:border-blue-500 text-white"
-                  />
-                </div>
-
-                <div className="space-y-1.5">
-                  <label className="font-bold text-gray-400">Card Number</label>
-                  <input
-                    type="text"
-                    required
-                    value={cardNo}
-                    onChange={handleCardNoChange}
-                    placeholder="4111 2222 3333 4444"
-                    maxLength={19}
-                    className="w-full px-4 py-2.5 bg-white/5 border border-white/10 rounded-xl outline-none focus:border-blue-500 text-white font-mono"
-                  />
-                </div>
-
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-1.5">
-                    <label className="font-bold text-gray-400">Expiry MM/YY</label>
-                    <input
-                      type="text"
-                      required
-                      value={cardExpiry}
-                      onChange={(e) => setCardExpiry(formatExpiry(e.target.value))}
-                      placeholder="12/28"
-                      maxLength={5}
-                      className="w-full px-4 py-2.5 bg-white/5 border border-white/10 rounded-xl outline-none focus:border-blue-500 text-white font-mono"
-                    />
-                  </div>
-                  <div className="space-y-1.5">
-                    <label className="font-bold text-gray-400">CVV Pin</label>
-                    <input
-                      type="password"
-                      required
-                      value={cardCvv}
-                      onChange={(e) => setCardCvv(e.target.value.replace(/[^0-9]/g, '').substring(0, 3))}
-                      placeholder="•••"
-                      maxLength={3}
-                      className="w-full px-4 py-2.5 bg-white/5 border border-white/10 rounded-xl outline-none focus:border-blue-500 text-white font-mono"
-                    />
-                  </div>
-                </div>
-
-                <div className="flex gap-2 pt-2">
-                  <button
-                    onClick={() => setPaymentStep('methods')}
-                    className="w-1/2 py-2.5 bg-white/5 hover:bg-white/10 font-bold rounded-xl text-xs cursor-pointer"
-                  >
-                    Back
-                  </button>
-                  <button
-                    onClick={triggerPaymentVerification}
-                    disabled={!cardNo || !cardExpiry || !cardCvv}
-                    className="w-1/2 py-2.5 bg-blue-600 hover:bg-blue-700 disabled:opacity-40 disabled:cursor-not-allowed font-bold rounded-xl text-xs cursor-pointer shadow-lg shadow-blue-500/10 flex items-center justify-center gap-1"
-                  >
-                    Pay ₹{batch.discountPrice}
-                    <ArrowRight className="w-3.5 h-3.5" />
-                  </button>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* STEP 3: UPI ID FORM */}
-          {paymentStep === 'upiForm' && (
-            <div className="space-y-5 animate-slideIn">
-              <h4 className="text-xs font-extrabold uppercase text-gray-400 tracking-wider">UPI ID Transfer</h4>
-
-              <div className="space-y-4 text-xs">
-                <div className="space-y-1.5">
-                  <label className="font-bold text-gray-400">Virtual Payment Address (VPA)</label>
-                  <input
-                    type="text"
-                    required
-                    value={upiId}
-                    onChange={(e) => setUpiId(e.target.value)}
-                    placeholder="arjun@okaxis"
-                    className="w-full px-4 py-2.5 bg-white/5 border border-white/10 rounded-xl outline-none focus:border-blue-500 text-white font-mono"
-                  />
-                  <p className="text-[10px] text-gray-400">We will trigger a payment request on your UPI client application.</p>
-                </div>
-
-                <div className="flex gap-2 pt-4">
-                  <button
-                    onClick={() => setPaymentStep('methods')}
-                    className="w-1/2 py-2.5 bg-white/5 hover:bg-white/10 font-bold rounded-xl text-xs cursor-pointer"
-                  >
-                    Back
-                  </button>
-                  <button
-                    onClick={triggerPaymentVerification}
-                    disabled={!upiId}
-                    className="w-1/2 py-2.5 bg-[#0071e3] hover:bg-[#0077ed] disabled:opacity-40 disabled:cursor-not-allowed font-bold rounded-xl text-xs cursor-pointer shadow-lg flex items-center justify-center gap-1"
-                  >
-                    Verify & Pay
-                    <ArrowRight className="w-3.5 h-3.5" />
-                  </button>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* STEP 4: PROCESSING PAYLOAD LOADER */}
-          {paymentStep === 'processing' && (
-            <div className="flex flex-col items-center justify-center min-h-[220px] text-center space-y-4">
-              <Loader2 className="w-10 h-10 text-blue-500 animate-spin" />
-              <div>
-                <p className="text-sm font-bold text-white">Validating Signature...</p>
-                <p className="text-[10px] text-gray-400 mt-1 max-w-[250px] mx-auto">
-                  Contacting Razorpay Gateway server. Do not press back or refresh the frame.
-                </p>
-              </div>
-            </div>
-          )}
-
-          {/* STEP 5: SUCCESS MODAL */}
-          {paymentStep === 'success' && (
-            <div className="flex flex-col items-center justify-center min-h-[220px] text-center space-y-4 animate-scaleUp">
-              <CheckCircle className="w-14 h-14 text-emerald-500 fill-emerald-500/10" />
-              <div>
-                <h4 className="text-base font-bold text-white">Payment Verified Successfully</h4>
-                <p className="text-[10px] text-gray-400 mt-1">
-                  Enrolled! Redirecting to student classroom...
-                </p>
-              </div>
-            </div>
-          )}
-
-        </div>
-
-        {/* Secure Trust Badges footer */}
-        <div className="bg-white/[0.02] py-4 px-6 border-t border-white/5 text-[10px] text-gray-500 flex items-center justify-between">
-          <span className="flex items-center gap-1">
-            <Shield className="w-3 h-3 text-emerald-500" />
-            PCI-DSS Compliant Server
-          </span>
-          <span>128-bit SSL Encryption</span>
-        </div>
+      if (mounted.current) { setPhase('ready'); setError(err instanceof Error ? err.message : 'Unable to open checkout.'); }
+    } finally { starting.current = false; }
+  }
+  async function startLearning() {
+    setPhase('busy');
+    try { await onPaymentSuccess(); }
+    catch (err) { setPhase('success'); setError(err instanceof Error ? err.message : 'Unable to refresh course access.'); }
+  }
+  return <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm">
+    <section role="dialog" aria-modal="true" aria-labelledby="payment-title" className="relative w-full max-w-md rounded-3xl bg-white p-7 shadow-2xl">
+      <button aria-label="Close payment" onClick={onClose} className="absolute right-4 top-4 rounded-full p-2"><X size={20} /></button>
+      <Shield className="mb-4 text-indigo-600" size={32} />
+      <h2 id="payment-title" className="text-xl font-bold">Secure batch purchase</h2>
+      <p className="mt-2 text-gray-600">{batch.title}</p>
+      <p className="my-4 text-3xl font-extrabold">₹{amount.toLocaleString('en-IN')}</p>
+      <p className="text-sm text-gray-500">Card, UPI and banking details are entered only in Razorpay Checkout.</p>
+      {error && <p role="alert" className="mt-4 rounded-xl bg-amber-50 p-3 text-sm text-amber-900">{error}</p>}
+      <div aria-live="polite" className="my-5">
+        {phase === 'busy' && <p className="flex items-center gap-2"><Loader2 className="animate-spin" size={18} /> Waiting for secure checkout / confirmation…</p>}
+        {phase === 'pending' && <p>{received ? 'Payment received. Confirmation pending.' : 'Payment confirmation pending.'} {polls >= 12 && 'Automatic checks paused; you can check again below.'}</p>}
+        {phase === 'success' && <p className="flex items-center gap-2 font-semibold text-emerald-700"><CheckCircle /> Payment Successful</p>}
       </div>
-    </div>
-  );
+      {phase === 'success' ? <button className="apple-btn-primary w-full" onClick={startLearning}>Start Learning</button> :
+        phase !== 'busy' && phase !== 'unavailable' && <button disabled={!batch.paymentEnabled} className="apple-btn-primary w-full disabled:opacity-50" onClick={begin}>
+          {batch.paymentEnabled ? (paymentId ? 'Reopen Razorpay Checkout' : 'Continue to Razorpay') : 'Purchases not enabled yet'}
+        </button>}
+      {paymentId && phase !== 'busy' && phase !== 'success' && <button onClick={() => { setPolls(0); void check(); }} className="mt-3 w-full text-sm font-semibold text-indigo-600">Check payment status</button>}
+      {paymentId && <p className="mt-4 break-all text-xs text-gray-400">Purchase reference: {paymentId}</p>}
+    </section>
+  </div>;
 }

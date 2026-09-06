@@ -11,6 +11,9 @@ import 'dotenv/config';
 import crypto from 'crypto';
 import { Request, Response, NextFunction } from 'express';
 import { createClient } from '@supabase/supabase-js';
+import { Payments, razorpayProvider } from './server/payments';
+import { paymentStore } from './server/payment-store';
+import { paymentRoutes } from './server/payment-routes';
 
 const app = express();
 const PORT = Number(process.env.PORT) || 3000;
@@ -105,7 +108,7 @@ function verifySessionToken(token: string): { id: string; role: string; email: s
   const [encrypted, hmac] = parts;
   
   const expectedHmac = crypto.createHmac('sha256', SESSION_SECRET).update(encrypted).digest('hex');
-  if (hmac !== expectedHmac) return null;
+  if (!/^[a-f0-9]{64}$/.test(hmac) || !crypto.timingSafeEqual(Buffer.from(hmac, 'hex'), Buffer.from(expectedHmac, 'hex'))) return null;
   
   try {
     const decipher = crypto.createDecipheriv('aes-256-cbc', crypto.scryptSync(SESSION_SECRET, 'salt-session', 32), Buffer.alloc(16, 0));
@@ -113,7 +116,7 @@ function verifySessionToken(token: string): { id: string; role: string; email: s
     decrypted += decipher.final('utf8');
     
     const payload = JSON.parse(decrypted);
-    if (Date.now() > payload.expiresAt) {
+    if (!Number.isFinite(payload.expiresAt) || typeof payload.id !== 'string' || Date.now() > payload.expiresAt) {
       logSecurityEvent('WARN', 'Session expired', { userId: payload.id, email: payload.email });
       return null;
     }
@@ -131,7 +134,7 @@ export interface AuthenticatedRequest extends Request {
   user?: { id: string; role: string; email: string };
 }
 
-const requireAuth = (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+const requireAuth = async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
   let token = '';
   const authHeader = req.headers.authorization;
   if (authHeader && authHeader.startsWith('Bearer ')) {
@@ -148,15 +151,40 @@ const requireAuth = (req: AuthenticatedRequest, res: Response, next: NextFunctio
     return res.status(401).json({ error: 'Authentication required. Please log in.' });
   }
   
-  const decoded = verifySessionToken(token);
-  if (!decoded) {
-    logSecurityEvent('WARN', 'Expired/Invalid session token presented', { path: req.originalUrl, ip: req.ip });
-    return res.status(401).json({ error: 'Session expired or invalid. Please log in again.' });
+  try {
+    let identity: { id: string; email?: string } | null = null;
+    if (token.split('.').length === 2) {
+      const decoded = verifySessionToken(token);
+      if (decoded) {
+        const { data, error } = await supabaseAdmin.auth.admin.getUserById(decoded.id);
+        if (!error) identity = data.user;
+      }
+    } else {
+      // Supabase verifies the JWT; decoding a client token is not authentication.
+      const { data, error } = await supabaseAdmin.auth.getUser(token);
+      if (!error) identity = data.user;
+    }
+    if (!identity) return res.status(401).json({ error: 'Session expired or invalid. Please log in again.' });
+    const { data: profile, error } = await supabaseAdmin.from('profiles').select('role').eq('id', identity.id).single();
+    if (error || !profile) return res.status(403).json({ error: 'Account profile unavailable.' });
+    req.user = { id: identity.id, email: identity.email || '', role: profile.role };
+    next();
+  } catch {
+    res.status(503).json({ error: 'Authentication service unavailable.' });
   }
-  
-  req.user = decoded;
-  next();
 };
+
+async function hasActiveBatchAccess(userId: string, batchId: string): Promise<boolean> {
+  const { data, error } = await supabaseAdmin.rpc('has_active_batch_access', { p_user_id: userId, p_batch_id: batchId });
+  if (error) throw error;
+  return data === true;
+}
+
+async function hasLectureAccess(userId: string, lectureId: string): Promise<boolean> {
+  const { data, error } = await supabaseAdmin.from('lectures').select('batch_id').eq('id', lectureId).maybeSingle();
+  if (error) throw error;
+  return !!data && hasActiveBatchAccess(userId, data.batch_id);
+}
 
 const requireAdmin = (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
   requireAuth(req, res, () => {
@@ -272,8 +300,18 @@ app.use((req: Request, res: Response, next: NextFunction) => {
 
 // Base64 is used only by the legacy dashboard upload form. The raw upload
 // limit is enforced again in `/api/upload` before data reaches Storage.
+const paymentConfig = {
+  key: process.env.RAZORPAY_KEY_ID || '',
+  secret: process.env.RAZORPAY_KEY_SECRET || '',
+  webhookSecret: process.env.RAZORPAY_WEBHOOK_SECRET || ''
+};
+const payments = paymentRoutes(new Payments(paymentStore(supabaseAdmin),
+  razorpayProvider(paymentConfig.key, paymentConfig.secret), paymentConfig), requireAuth);
+// Signature validation requires untouched bytes, before any JSON body parser.
+app.use(payments.webhook);
 app.use(express.json({ limit: '30mb' }));
 app.use(express.urlencoded({ extended: true, limit: '30mb' }));
+app.use(payments.api);
 
 // Used by Render and other hosting providers to verify the service is running.
 // It intentionally does not depend on Supabase or any local file storage.
@@ -891,6 +929,9 @@ function mapBatch(b: any): Batch {
     thumbnailUrl: b.thumbnail_url || 'https://images.unsplash.com/photo-1522202176988-66273c2fd55f?auto=format&fit=crop&q=80&w=400',
     lastUpdated: b.last_updated || b.created_at || new Date().toISOString(),
     isFree: Boolean(b.is_free),
+    isPaid: Boolean(b.is_paid),
+    paymentEnabled: Boolean(b.payment_enabled),
+    razorpayPaymentButtonId: b.razorpay_payment_button_id || '',
     customTag: b.custom_tag || ''
   };
 }
@@ -1077,10 +1118,26 @@ app.get('/api/batches/:id', async (req, res) => {
   }
 });
 
+function batchPaymentFields(body: any, current: any = {}) {
+  const free = body.isFree ?? current.is_free ?? false;
+  const enabled = body.paymentEnabled ?? current.payment_enabled ?? false;
+  const price = Number(body.price ?? current.price ?? 0);
+  const discount = Number(body.discountPrice ?? current.discount_price ?? 0);
+  const button = String(body.razorpayPaymentButtonId ?? current.razorpay_payment_button_id ?? '').trim();
+  if (typeof free !== 'boolean' || typeof enabled !== 'boolean' || !Number.isFinite(price) || !Number.isFinite(discount) || price < 0 || discount < 0 ||
+    (enabled && (free || (discount > 0 ? discount : price) <= 0)) || (button && !/^pl_[A-Za-z0-9]+$/.test(button))) {
+    throw new Error('Invalid payment settings: use a positive paid-batch price and a button ID, not embed code.');
+  }
+  return { is_free: free, is_paid: !free, price: free ? 0 : price, discount_price: free ? 0 : discount > 0 ? discount : null,
+    payment_enabled: enabled, razorpay_payment_button_id: button || null };
+}
+
 app.post('/api/batches', requireAdmin, async (req, res) => {
   try {
+    let paymentFields;
+    try { paymentFields = batchPaymentFields(req.body); } catch (error: any) { return res.status(400).json({ error: error.message }); }
     const { title, description, instructor, price, discountPrice, duration, language, difficulty, thumbnailUrl, bannerUrl, isFree, customTag } = req.body;
-    const { data, error } = await supabase
+    const { data, error } = await supabaseAdmin
       .from('batches')
       .insert([{
         title,
@@ -1095,6 +1152,7 @@ app.post('/api/batches', requireAdmin, async (req, res) => {
         banner_url: bannerUrl,
         is_free: Boolean(isFree),
         is_paid: !isFree,
+        ...paymentFields,
         is_active: true,
         category: 'MPPSC',
         custom_tag: customTag || null
@@ -1111,8 +1169,13 @@ app.post('/api/batches', requireAdmin, async (req, res) => {
 
 app.put('/api/batches/:id', requireAdmin, async (req, res) => {
   try {
+    const { data: current, error: lookupError } = await supabaseAdmin.from('batches').select('*').eq('id', req.params.id).maybeSingle();
+    if (lookupError) throw lookupError;
+    if (!current) return res.status(404).json({ error: 'Batch not found.' });
+    let paymentFields;
+    try { paymentFields = batchPaymentFields(req.body, current); } catch (error: any) { return res.status(400).json({ error: error.message }); }
     const { title, description, instructor, price, discountPrice, duration, language, difficulty, thumbnailUrl, bannerUrl, isFree, customTag } = req.body;
-    const { data, error } = await supabase
+    const { data, error } = await supabaseAdmin
       .from('batches')
       .update({
         title,
@@ -1127,6 +1190,7 @@ app.put('/api/batches/:id', requireAdmin, async (req, res) => {
         banner_url: bannerUrl,
         is_free: isFree !== undefined ? Boolean(isFree) : undefined,
         is_paid: isFree !== undefined ? !isFree : undefined,
+        ...paymentFields,
         custom_tag: customTag || null,
         last_updated: new Date().toISOString()
       })
@@ -1158,9 +1222,22 @@ app.delete('/api/batches/:id', requireAdmin, async (req, res) => {
 // -------------------------------------------------------------
 // Subjects, Chapters, Lectures Endpoints
 // -------------------------------------------------------------
-app.get('/api/batches/:batchId/structure', async (req, res) => {
+app.get('/api/batches/:batchId/access', requireAuth, async (req: AuthenticatedRequest, res) => {
+  try {
+    res.json({ batchId: req.params.batchId, hasAccess: await hasActiveBatchAccess(req.user!.id, req.params.batchId) });
+  } catch {
+    res.status(503).json({ error: 'Unable to verify course access.' });
+  }
+});
+
+app.get('/api/batches/:batchId/structure', requireAuth, async (req: AuthenticatedRequest, res) => {
   const { batchId } = req.params;
   try {
+    if (!await hasActiveBatchAccess(req.user!.id, batchId)) {
+      return res.status(403).json({ error: 'An active enrollment and verified payment are required for this paid batch.' });
+    }
+    // The shared database predicate has authorized this exact caller and batch.
+    const supabase = supabaseAdmin;
     const { data: batchSubjects, error: subError } = await supabase
       .from('subjects')
       .select('*')
@@ -1540,7 +1617,9 @@ app.get('/api/enrollments/:userId', requireAuth, async (req: AuthenticatedReques
       .eq('status', 'active')
       .order('created_at', { ascending: false });
     if (error) throw error;
-    res.json((data || []).map(mapEnrollment));
+    const eligible = await Promise.all((data || []).map(async enrollment =>
+      await hasActiveBatchAccess(userId, enrollment.batch_id) ? enrollment : null));
+    res.json(eligible.filter(Boolean).map(mapEnrollment));
   } catch (err: any) {
     res.status(500).json({ error: err.message });
   }
@@ -1582,61 +1661,7 @@ app.post('/api/enrollments', requireAuth, async (req: AuthenticatedRequest, res)
   }
 });
 
-// Razorpay Order Mock
-app.post('/api/payments/create-order', requireAuth, (req, res) => {
-  const { batchId, amount } = req.body;
-  if (!batchId) return res.status(400).json({ error: 'Missing batchId' });
-
-  const orderId = 'order_' + crypto.randomBytes(6).toString('hex');
-  res.json({
-    id: orderId,
-    amount: amount || 0,
-    currency: 'INR',
-    message: 'Razorpay order generated successfully'
-  });
-});
-
-// Razorpay Payment Verification
-app.post('/api/payments/verify', requireAuth, async (req: AuthenticatedRequest, res) => {
-  const { userId, batchId, amount, razorpayOrderId, razorpayPaymentId, signature } = req.body;
-  if (!userId || !batchId || !razorpayOrderId) {
-    return res.status(400).json({ error: 'Missing verification data' });
-  }
-
-  // Authorization check: User can only verify payments for themselves, unless they are admin
-  if (req.user?.id !== userId && req.user?.role !== 'admin') {
-    logSecurityEvent('WARN', 'Unauthorized payment verification trigger (ID spoofing check)', { reqUserId: req.user?.id, targetUserId: userId });
-    return res.status(403).json({ error: 'Access denied. You cannot register payments for another user.' });
-  }
-
-  try {
-    const database = getSupabaseAdmin();
-    const { data: payment, error: paymentError } = await database
-      .from('payments')
-      .insert({
-        user_id: userId,
-        batch_id: batchId,
-        amount: Number(amount),
-        status: 'success',
-        payment_gateway: 'razorpay',
-        gateway_order_id: razorpayOrderId,
-        gateway_payment_id: razorpayPaymentId || null
-      })
-      .select()
-      .single();
-    if (paymentError) throw paymentError;
-
-    const { error: enrollmentError } = await database
-      .from('enrollments')
-      .upsert({ user_id: userId, batch_id: batchId, access_type: 'paid', status: 'active' }, { onConflict: 'user_id,batch_id' });
-    if (enrollmentError) throw enrollmentError;
-
-    logSecurityEvent('INFO', 'Mock payment recorded and batch enrollment registered', { paymentId: payment.id, userId, batchId, amount });
-    res.json({ success: true, payment: mapPayment(payment), message: 'Payment recorded. Razorpay signature verification will be enabled in Step 6.' });
-  } catch (err: any) {
-    res.status(500).json({ error: err.message });
-  }
-});
+// Real order/verification/status routes are mounted above with the payment service.
 
 app.get('/api/payments/history/:userId', requireAuth, async (req: AuthenticatedRequest, res) => {
   const { userId } = req.params;
@@ -1706,6 +1731,7 @@ app.post('/api/progress', requireAuth, async (req: AuthenticatedRequest, res) =>
   }
 
   try {
+    if (!await hasLectureAccess(req.user!.id, lectureId)) return res.status(403).json({ error: 'Course access required.' });
     const database = getSupabaseAdmin();
     const safePercentage = Math.max(0, Math.min(100, Math.round(Number(watchPercentage) || 0)));
     const { error: progressError } = await database
@@ -1818,6 +1844,7 @@ app.post('/api/watch-history', requireAuth, async (req: AuthenticatedRequest, re
   }
 
   try {
+    if (!await hasLectureAccess(req.user!.id, lectureId)) return res.status(403).json({ error: 'Course access required.' });
     const { error } = await getSupabaseAdmin().from('watch_history').upsert({
       user_id: userId,
       lecture_id: lectureId,
@@ -1888,9 +1915,9 @@ app.get('/api/search', async (req, res) => {
     const pattern = `%${query.replace(/[%_]/g, '\\$&')}%`;
     const database = getSupabaseAdmin();
     const [batches, subjects, lectures] = await Promise.all([
-      database.from('batches').select('*').or(`title.ilike.${pattern},description.ilike.${pattern},instructor.ilike.${pattern}`).limit(20),
-      database.from('subjects').select('*').or(`title.ilike.${pattern},description.ilike.${pattern}`).limit(20),
-      database.from('lectures').select('*').or(`title.ilike.${pattern},description.ilike.${pattern}`).limit(20)
+      database.from('batches').select('*').eq('is_active', true).or(`title.ilike.${pattern},description.ilike.${pattern},instructor.ilike.${pattern}`).limit(20),
+      Promise.resolve({ data: [], error: null }),
+      Promise.resolve({ data: [], error: null })
     ]);
     if (batches.error || subjects.error || lectures.error) throw batches.error || subjects.error || lectures.error;
     res.json({

@@ -34,6 +34,9 @@ export interface Batch {
   thumbnailUrl: string;
   lastUpdated: string;
   isFree: boolean;
+  isPaid?: boolean;
+  paymentEnabled?: boolean;
+  razorpayPaymentButtonId?: string;
   rating?: number;
   ratingCount?: number;
   customTag?: string;

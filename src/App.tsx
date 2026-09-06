@@ -14,6 +14,7 @@ import CoursePlayer from './components/CoursePlayer';
 import StudentDashboard from './components/StudentDashboard';
 import AdminDashboard from './components/AdminDashboard';
 import PaymentModal from './components/PaymentModal';
+import { paymentRequest } from './lib/paymentClient';
 import { supabase } from './lib/supabaseClient';
 
 type AppView = 'home' | 'free-batches' | 'paid-batches' | 'student-dashboard' | 'admin-dashboard' | 'profile' | 'player';
@@ -282,8 +283,10 @@ export default function App() {
         return;
       }
       const data = await res.json();
-      if (Array.isArray(data)) {
+      if (res.ok && Array.isArray(data)) {
         setEnrolledBatchIds(data.map((e: any) => e.batchId));
+      } else {
+        setEnrolledBatchIds([]);
       }
     } catch (err) {
       console.error('Failed to fetch student enrollments:', err);
@@ -398,6 +401,24 @@ export default function App() {
     setPassword('');
     setRegName('');
     setAuthError('');
+  };
+
+  async function openVerifiedBatch(batchId: string) {
+    if (!user) throw new Error('Please sign in to start learning.');
+    const access = await paymentRequest(`/api/batches/${batchId}/access`);
+    if (access.batchId !== batchId || access.hasAccess !== true) throw new Error('This course requires an active enrollment and, for paid batches, verified payment.');
+    await loadEnrollments(user.id);
+    setActiveBatchId(batchId); setCurrentView('player');
+  }
+  const viewLectures = (batchId: string) => { void openVerifiedBatch(batchId).catch(error => alert(error.message)); };
+  const purchaseBatch = async (batch: Batch) => {
+    if (!user) { setAuthMode('login'); return; }
+    try {
+      const access = await paymentRequest(`/api/batches/${batch.id}/access`);
+      if (access.hasAccess === true) { await openVerifiedBatch(batch.id); return; }
+      if (!batch.paymentEnabled) { alert('Purchases are not enabled for this batch yet.'); return; }
+      setActiveCheckoutBatch(batch);
+    } catch (error) { alert(error instanceof Error ? error.message : 'Unable to check course access.'); }
   };
 
   // Secure verification handler
@@ -1020,17 +1041,8 @@ export default function App() {
                               batch={batch}
                               isEnrolled={enrolledBatchIds.includes(batch.id)}
                               onEnrollFree={handleEnrollFreeBatch}
-                              onPurchaseClick={(b) => {
-                                if (!user) {
-                                  setAuthMode('login');
-                                } else {
-                                  setActiveCheckoutBatch(b);
-                                }
-                              }}
-                              onViewLectures={(bId) => {
-                                setActiveBatchId(bId);
-                                setCurrentView('player');
-                              }}
+onPurchaseClick={purchaseBatch}
+onViewLectures={viewLectures}
                             />
                           ))}
                         </div>
@@ -1370,10 +1382,7 @@ export default function App() {
                             isEnrolled={enrolledBatchIds.includes(batch.id)}
                             onEnrollFree={handleEnrollFreeBatch}
                             onPurchaseClick={() => { }}
-                            onViewLectures={(bId) => {
-                              setActiveBatchId(bId);
-                              setCurrentView('player');
-                            }}
+onViewLectures={viewLectures}
                           />
                         ))}
                       </div>
@@ -1405,17 +1414,8 @@ export default function App() {
                             batch={batch}
                             isEnrolled={enrolledBatchIds.includes(batch.id)}
                             onEnrollFree={() => { }}
-                            onPurchaseClick={(b) => {
-                              if (!user) {
-                                setAuthMode('login');
-                              } else {
-                                setActiveCheckoutBatch(b);
-                              }
-                            }}
-                            onViewLectures={(bId) => {
-                              setActiveBatchId(bId);
-                              setCurrentView('player');
-                            }}
+onPurchaseClick={purchaseBatch}
+onViewLectures={viewLectures}
                           />
                         ))}
                       </div>
@@ -1433,10 +1433,7 @@ export default function App() {
                     userName={user.name}
                     batches={batches}
                     enrolledBatchIds={enrolledBatchIds}
-                    onViewLectures={(bId) => {
-                      setActiveBatchId(bId);
-                      setCurrentView('player');
-                    }}
+onViewLectures={viewLectures}
                   />
                 )}
 
@@ -1580,17 +1577,16 @@ export default function App() {
       </main>
 
       {/* -------------------------------------------------------------
-          SECURE PAYMENTS OVERLAY DIALOG (RAZORPAY GATEWAY SIMULATOR)
+          SECURE PAYMENTS OVERLAY DIALOG (OFFICIAL RAZORPAY CHECKOUT)
           ------------------------------------------------------------- */}
       {activeCheckoutBatch && user && (
         <PaymentModal
+          key={`${user.id}:${activeCheckoutBatch.id}`}
           batch={activeCheckoutBatch}
           userId={user.id}
           onClose={() => setActiveCheckoutBatch(null)}
-          onPaymentSuccess={() => {
-            loadEnrollments(user.id);
-            setActiveBatchId(activeCheckoutBatch.id);
-            setCurrentView('player');
+          onPaymentSuccess={async () => {
+            await openVerifiedBatch(activeCheckoutBatch.id);
             setActiveCheckoutBatch(null);
           }}
         />

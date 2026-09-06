@@ -141,7 +141,7 @@ export default function BatchCard({ batch, isEnrolled, onEnrollFree, onPurchaseC
                 onClick={() => onViewLectures(batch.id)}
                 className="bg-[#6D5DF6] hover:bg-[#7C4DFF] text-white text-xs font-bold px-4 py-2.5 rounded-full shadow-md shadow-[#6D5DF6]/10 transition-all duration-300 hover:scale-102 cursor-pointer"
               >
-                Learn Now
+                Start Learning
               </button>
             ) : batch.isFree ? (
               <button
@@ -154,10 +154,11 @@ export default function BatchCard({ batch, isEnrolled, onEnrollFree, onPurchaseC
             ) : (
               <button
                 id={`buy-btn-${batch.id}`}
+                disabled={!batch.paymentEnabled}
                 onClick={() => onPurchaseClick(batch)}
                 className="bg-[#6D5DF6] hover:bg-[#7C4DFF] text-white text-xs font-bold px-4 py-2.5 rounded-full shadow-md shadow-[#6D5DF6]/10 transition-all duration-300 hover:scale-102 cursor-pointer"
               >
-                Buy Now
+                {batch.paymentEnabled ? 'Buy Now' : 'Coming Soon'}
               </button>
             )}
           </div>
