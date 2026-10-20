@@ -41,11 +41,11 @@ All client endpoints require the existing web session or Supabase access token i
 
 Set backend-only `RAZORPAY_KEY_ID`, `RAZORPAY_KEY_SECRET`, and `RAZORPAY_WEBHOOK_SECRET`. No secret belongs in Vite, Expo, CMS, or source control. Return only the public key ID to Checkout. Test/live credentials must match stored purchase mode; reconcile old-mode purchases before switching.
 
-The local test API credentials were authenticated with a **read-only** Razorpay request. The webhook secret is still unset. Configure a strong secret directly in the server environment and the Razorpay test-mode dashboard, then configure the deployed HTTPS endpoint:
+The local test API credentials were authenticated with a **read-only** Razorpay request. On 2026-09-07 the Test-mode webhook TZ1fCIPxsdmIGn was enabled and a matching dedicated RAZORPAY_WEBHOOK_SECRET saved in Render. Local .env was not changed. The configured HTTPS endpoint is:
 
-`https://YOUR-BACKEND/api/payments/razorpay/webhook`
+`https://c50-web.onrender.com/api/payments/razorpay/webhook`
 
-Subscribe to `payment.captured`, `order.paid`, and `payment.failed`. Perform an actual test-mode Checkout payment and verify dashboard webhook deliveries after deploying; these external end-to-end tests have not yet occurred. No paid batch was enabled in this step.
+Subscriptions to `payment.captured`, `order.paid`, and `payment.failed` are active. Render redeploy dep-daf4d2mq1p3s73bjs6e0 is Live; /health returns 200 and unsigned webhook requests return 400 Invalid webhook signature. Perform an actual test-mode Checkout payment and verify dashboard webhook deliveries; these external end-to-end tests have not yet occurred. No payment was made or paid batch enabled in this step.
 
 The in-process authenticated limiter is 30 requests per route/user/minute. Add a shared edge limiter for a multi-instance deployment. Processing is synchronous and durably retryable; monitor webhook latency/failures and provider retry exhaustion. Reconcile affected purchases via the owner-scoped status endpoint or a reviewed backend-only operation.
 
