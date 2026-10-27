@@ -15,7 +15,8 @@ import StudentDashboard from './components/StudentDashboard';
 import AdminDashboard from './components/AdminDashboard';
 import PaymentModal from './components/PaymentModal';
 import { paymentRequest } from './lib/paymentClient';
-import { supabase } from './lib/supabaseClient';
+import { recoveryRequest } from './lib/supabaseClient';
+import PasswordRecovery from './components/PasswordRecovery';
 
 type AppView = 'home' | 'free-batches' | 'paid-batches' | 'student-dashboard' | 'admin-dashboard' | 'profile' | 'player';
 
@@ -51,13 +52,9 @@ export default function App() {
   const [forgotEmail, setForgotEmail] = useState('');
   const [forgotMsg, setForgotMsg] = useState('');
   const [forgotError, setForgotError] = useState('');
+  const [forgotBusy, setForgotBusy] = useState(false);
 
   const [showReset, setShowReset] = useState(false);
-  const [resetEmail, setResetEmail] = useState('');
-  const [resetToken, setResetToken] = useState('');
-  const [resetNewPassword, setResetNewPassword] = useState('');
-  const [resetMsg, setResetMsg] = useState('');
-  const [resetError, setResetError] = useState('');
 
   // Data States
   const [batches, setBatches] = useState<Batch[]>([]);
@@ -165,43 +162,10 @@ export default function App() {
       }
     }
 
-    // Capture potential reset parameters from URL path & hash (Supabase Auth format)
-    const path = window.location.pathname;
-    const hash = window.location.hash;
-    const search = window.location.search;
-
-    if (path.startsWith('/reset-password') || path.includes('reset-password')) {
+    // The client captures recovery parameters before Supabase can consume them.
+    if (recoveryRequest.kind !== 'none') {
       setAuthMode('login');
       setShowReset(true);
-
-      if (hash) {
-        const params = new URLSearchParams(hash.substring(1)); // strip '#'
-        const accessToken = params.get('access_token');
-        const errorDesc = params.get('error_description');
-        const errorCode = params.get('error_code');
-
-        if (errorDesc) {
-          let userFriendlyError = decodeURIComponent(errorDesc.replace(/\+/g, ' '));
-          if (errorCode === 'otp_expired') {
-            userFriendlyError = "This password reset link has expired or was already used. Please request a new link.";
-          }
-          setResetError(userFriendlyError);
-        } else if (accessToken) {
-          setResetToken(accessToken);
-          setResetEmail('');
-        }
-      }
-    } else {
-      // Capture fallback search query reset parameters
-      const queryParams = new URLSearchParams(search);
-      const tok = queryParams.get('token');
-      const em = queryParams.get('email');
-      if (tok && em) {
-        setResetToken(tok);
-        setResetEmail(em);
-        setAuthMode('login');
-        setShowReset(true);
-      }
     }
 
     loadBatches();
@@ -456,6 +420,8 @@ export default function App() {
   // Forgot password triggers
   const handleForgotPassword = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (forgotBusy) return;
+    setForgotBusy(true);
     setForgotError('');
     setForgotMsg('');
 
@@ -475,45 +441,8 @@ export default function App() {
     } catch (err) {
       console.error('Forgot password fail:', err);
       setForgotError('Connection error.');
-    }
-  };
-
-  // Reset password action
-  const handleResetPassword = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setResetError('');
-    setResetMsg('');
-
-    try {
-      if (resetToken) {
-        const { error: sessionError } = await supabase.auth.setSession({
-          access_token: resetToken,
-          refresh_token: ''
-        });
-        if (sessionError) {
-          setResetError(sessionError.message);
-          return;
-        }
-      }
-
-      const { error: updateError } = await supabase.auth.updateUser({ password: resetNewPassword });
-
-      if (updateError) {
-        setResetError(updateError.message);
-      } else {
-        setResetMsg('Your password has been successfully reset. Please log in with your new credentials.');
-        setResetEmail('');
-        setResetToken('');
-        setResetNewPassword('');
-        // Instantly transition to login
-        setTimeout(() => {
-          setShowReset(false);
-          setAuthMode('login');
-        }, 3000);
-      }
-    } catch (err) {
-      console.error('Reset password fail:', err);
-      setResetError('Connection error.');
+    } finally {
+      setForgotBusy(false);
     }
   };
 
@@ -1606,7 +1535,7 @@ onViewLectures={viewLectures}
             >
               {/* Modal close */}
               <button
-                onClick={() => { setAuthMode(null); setShowForgot(false); }}
+                onClick={() => { if (showReset) { window.location.assign('/'); return; } setAuthMode(null); setShowForgot(false); }}
                 className="absolute top-5 right-5 p-2 hover:bg-gray-100 rounded-full transition-all outline-none cursor-pointer"
               >
                 <X className="w-4 h-4 text-gray-500" />
@@ -1652,9 +1581,10 @@ onViewLectures={viewLectures}
 
                     <button
                       type="submit"
+                      disabled={forgotBusy}
                       className="w-full apple-btn-primary text-xs py-3 mt-4 font-bold shadow-lg shadow-[#6D5DF6]/10 cursor-pointer"
                     >
-                      Send Password Reset Link
+                      {forgotBusy ? 'Sending…' : 'Send Password Reset Link'}
                     </button>
                   </form>
 
@@ -1668,84 +1598,7 @@ onViewLectures={viewLectures}
                   </div>
                 </div>
               ) : showReset ? (
-                /* RESET PASSWORD VIEW (WITH TOKEN) */
-                <div className="space-y-4">
-                  <div className="text-center space-y-2 mb-6">
-                    <div className="w-8 h-8 bg-purple-600 text-white rounded-full flex items-center justify-center font-bold text-xs mx-auto">
-                      A
-                    </div>
-                    <h3 className="text-xl font-extrabold text-gray-900 tracking-tight font-sans">
-                      New Password Setup
-                    </h3>
-                    <p className="text-xs text-gray-400">Complete password modification securely</p>
-                  </div>
-
-                  {resetMsg && (
-                    <div className="p-3 bg-emerald-50 text-emerald-600 rounded-xl text-xs font-semibold">
-                      {resetMsg}
-                    </div>
-                  )}
-
-                  {resetError && (
-                    <div className="p-3 bg-red-50 text-red-600 rounded-xl text-xs font-semibold">
-                      {resetError}
-                    </div>
-                  )}
-
-                  <form onSubmit={handleResetPassword} className="space-y-4 text-xs font-medium">
-                    <div className="space-y-1.5">
-                      <label className="font-bold text-gray-600">Email Address</label>
-                      <input
-                        type="email"
-                        required
-                        value={resetEmail}
-                        onChange={(e) => setResetEmail(e.target.value)}
-                        placeholder="yourname@domain.com"
-                        className="w-full px-3.5 py-2.5 border rounded-xl outline-none focus:ring-1 focus:ring-[#6D5DF6]"
-                      />
-                    </div>
-
-                    <div className="space-y-1.5">
-                      <label className="font-bold text-gray-600">Verification Token</label>
-                      <input
-                        type="text"
-                        required
-                        value={resetToken}
-                        onChange={(e) => setResetToken(e.target.value)}
-                        placeholder="Enter token"
-                        className="w-full px-3.5 py-2.5 border rounded-xl outline-none focus:ring-1 focus:ring-[#6D5DF6]"
-                      />
-                    </div>
-
-                    <div className="space-y-1.5">
-                      <label className="font-bold text-gray-600">New Secure Password</label>
-                      <input
-                        type="password"
-                        required
-                        value={resetNewPassword}
-                        onChange={(e) => setResetNewPassword(e.target.value)}
-                        placeholder="••••••••"
-                        className="w-full px-3.5 py-2.5 border rounded-xl outline-none focus:ring-1 focus:ring-[#6D5DF6]"
-                      />
-                    </div>
-
-                    <button
-                      type="submit"
-                      className="w-full apple-btn-primary text-xs py-3 mt-4 font-bold shadow-lg shadow-[#6D5DF6]/10 cursor-pointer"
-                    >
-                      Update Password Securely
-                    </button>
-                  </form>
-
-                  <div className="mt-5 text-center text-xs">
-                    <button
-                      onClick={() => setShowReset(false)}
-                      className="text-[#6D5DF6] font-bold hover:underline cursor-pointer"
-                    >
-                      Cancel Reset
-                    </button>
-                  </div>
-                </div>
+                <PasswordRecovery onRequestNew={() => { setShowForgot(true); setForgotError(''); setForgotMsg(''); }} />
               ) : (
                 /* MAIN LOGIN / REGISTER VIEW */
                 <>

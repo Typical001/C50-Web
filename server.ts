@@ -14,6 +14,7 @@ import { createClient } from '@supabase/supabase-js';
 import { Payments, razorpayProvider } from './server/payments';
 import { paymentStore } from './server/payment-store';
 import { paymentRoutes } from './server/payment-routes';
+import { recoveryRedirect } from './server/recovery-config';
 
 const app = express();
 const PORT = Number(process.env.PORT) || 3000;
@@ -831,49 +832,31 @@ app.post('/api/auth/verify-email', (req, res) => {
 
 // Secure endpoint to request a password reset token
 app.post('/api/auth/forgot-password', rateLimitAuth, async (req, res) => {
-  const { email } = req.body;
+  const email = req.body?.email;
+  if (typeof email !== 'string' || email.trim().length > 254 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) {
+    return res.status(400).json({ error: 'Enter a valid email address.' });
+  }
+  let redirectTo: string;
+  try {
+    redirectTo = recoveryRedirect(APP_URL, process.env.NODE_ENV === 'production');
+  } catch {
+    return res.status(503).json({ error: 'Password recovery is temporarily unavailable. Please contact support.' });
+  }
   try {
     const { error } = await supabase.auth.resetPasswordForEmail(email.trim(), {
-      redirectTo: `${APP_URL}/reset-password`
+      redirectTo
     });
     if (error) throw error;
     res.json({ message: 'If this email exists in our records, a secure password reset link has been dispatched.' });
   } catch (err: any) {
-    res.status(500).json({ error: err.message });
+    res.status(503).json({ error: 'Unable to send a reset email right now. Please wait a few minutes and try again.' });
   }
 });
 
-// Secure endpoint to perform password reset
-app.post('/api/auth/reset-password', async (req, res) => {
-  const { newPassword, token } = req.body;
-  
-  if (!token) {
-    return res.status(400).json({ error: 'Session token is required to reset password.' });
-  }
-
-  try {
-    const userClient = createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, {
-      auth: {
-        persistSession: false,
-        autoRefreshToken: false
-      }
-    });
-
-    const { error: sessionError } = await userClient.auth.setSession({
-      access_token: token,
-      refresh_token: ''
-    });
-
-    if (sessionError) throw sessionError;
-
-    const { error: updateError } = await userClient.auth.updateUser({ password: newPassword });
-    if (updateError) throw updateError;
-
-    res.json({ success: true, message: 'Your password has been successfully reset. Please log in with your new credentials.' });
-  } catch (err: any) {
-    logSecurityEvent('ERROR', 'Password reset failure', { error: err.message });
-    res.status(500).json({ error: err.message });
-  }
+// Retire the unused token-paste endpoint. Recovery updates go directly to Auth
+// using the validated, ephemeral recovery session in the web client.
+app.post('/api/auth/reset-password', (_req, res) => {
+  res.status(410).json({ error: 'Open the newest password reset email to update your password.' });
 });
 
 
