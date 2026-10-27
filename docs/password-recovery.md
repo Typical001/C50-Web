@@ -18,4 +18,4 @@ The backend rejects malformed emails and insecure/local production APP_URL value
 
 ## Operational status (2026-10-27)
 
-Local implementation only. Supabase connection was confirmed and C50 reports ACTIVE_HEALTHY, but the available connector does not expose Auth URL/template configuration. Hosted Auth settings and deployment have not been changed or verified by this task; use the dashboard checklist above. No email sent, password changed, or live user session revoked during implementation.
+Follow-up browser verification: the fix is deployed (live bundle index-C7nbBxqU.js; local repository commit 7335910). Corrected the hosted Site URL from localhost to https://c50-web.onrender.com and added https://c50-web.onrender.com/reset-password to the allow-list, preserving both local-development entries. Verified the saved dashboard list and the live expired-link/resend UI. The email template and successful real-email recovery remain unverified. The user must request a fresh email and complete the reset/login. No email sent, password changed, or live user session revoked during this task.
