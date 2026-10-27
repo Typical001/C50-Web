@@ -2029,7 +2029,7 @@ onViewLectures={viewLectures}
           <div className="flex flex-col sm:flex-row justify-between items-center gap-4 text-[10px] font-semibold">
             <p>Copyright &copy; 2026 Carrier-50 Inc. All rights reserved.</p>
             <div className="flex gap-4">
-              <span className="hover:underline cursor-pointer">Privacy Policy</span>
+              <a href="/privacy" className="hover:underline">Privacy Policy</a>
               <span>•</span>
               <span className="hover:underline cursor-pointer">Terms of Service</span>
             </div>

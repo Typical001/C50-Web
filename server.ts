@@ -18,6 +18,12 @@ import { paymentRoutes } from './server/payment-routes';
 const app = express();
 const PORT = Number(process.env.PORT) || 3000;
 
+// Public legal page: no session, database request or client JavaScript required.
+app.get(['/privacy', '/privacy/'], (_req, res) => {
+  const root = process.env.NODE_ENV === 'production' ? 'dist' : 'public';
+  res.sendFile(path.resolve(root, 'privacy', 'index.html'));
+});
+
 function requiredServerEnv(name: string): string {
   const value = process.env[name]?.trim();
   if (!value) throw new Error(`Missing required server environment variable: ${name}`);
