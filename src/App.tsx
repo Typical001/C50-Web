@@ -1883,6 +1883,8 @@ onViewLectures={viewLectures}
             <p>Copyright &copy; 2026 Carrier-50 Inc. All rights reserved.</p>
             <div className="flex gap-4">
               <a href="/privacy" className="hover:underline">Privacy Policy</a>
+              <span aria-hidden="true">•</span>
+              <a href="/delete-account" className="hover:underline">Request Account Deletion</a>
               <span>•</span>
               <span className="hover:underline cursor-pointer">Terms of Service</span>
             </div>

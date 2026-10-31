@@ -20,6 +20,11 @@ const app = express();
 const PORT = Number(process.env.PORT) || 3000;
 
 // Public legal page: no session, database request or client JavaScript required.
+app.get(['/delete-account', '/delete-account/'], (_req, res) => {
+  const root = process.env.NODE_ENV === 'production' ? 'dist' : 'public';
+  res.sendFile(path.resolve(root, 'delete-account', 'index.html'));
+});
+
 app.get(['/privacy', '/privacy/'], (_req, res) => {
   const root = process.env.NODE_ENV === 'production' ? 'dist' : 'public';
   res.sendFile(path.resolve(root, 'privacy', 'index.html'));
