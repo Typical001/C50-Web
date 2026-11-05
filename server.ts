@@ -19,6 +19,11 @@ import { recoveryRedirect } from './server/recovery-config';
 const app = express();
 const PORT = Number(process.env.PORT) || 3000;
 
+app.get(['/terms', '/terms/'], (_req, res) => {
+  const root = process.env.NODE_ENV === 'production' ? 'dist' : 'public';
+  res.sendFile(path.resolve(root, 'terms', 'index.html'));
+});
+
 // Public legal page: no session, database request or client JavaScript required.
 app.get(['/delete-account', '/delete-account/'], (_req, res) => {
   const root = process.env.NODE_ENV === 'production' ? 'dist' : 'public';

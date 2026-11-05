@@ -1886,7 +1886,7 @@ onViewLectures={viewLectures}
               <span aria-hidden="true">•</span>
               <a href="/delete-account" className="hover:underline">Request Account Deletion</a>
               <span>•</span>
-              <span className="hover:underline cursor-pointer">Terms of Service</span>
+              <a href="/terms" className="hover:underline">Terms of Service</a>
             </div>
           </div>
         </div>
