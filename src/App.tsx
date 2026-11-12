@@ -1,4 +1,4 @@
-import { isTestSeries } from './lib/testSeries';
+import TestSeriesCatalog from './components/TestSeriesCatalog';
 import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import {
@@ -814,7 +814,7 @@ export default function App() {
 
       {/* Main Workspace Frame container */}
       <main className="flex-grow pt-12">
-        {batchesError && (
+        {batchesError && currentView !== 'test-series' && (
           <div role="alert" className="mx-auto max-w-7xl rounded-xl bg-red-50 p-4 text-red-700">
             {batchesError}
             <button onClick={loadBatches} disabled={loadingBatches} className="ml-3 font-semibold underline">
@@ -1308,15 +1308,12 @@ onViewLectures={viewLectures}
                 {/* -------------------------------------------------------------
                 VIEW: FREE BATCHES CATALOG
                 ------------------------------------------------------------- */}
-                {currentView === 'test-series' && <section className="space-y-6">
-                  <h2 className="text-3xl font-bold">Test Series</h2>
-                  <p>Explore free and paid preparation series and their study content.</p>
-                  <div className="flex gap-3">{(['all','free','paid'] as const).map(value => <button key={value} aria-pressed={seriesFilter === value} onClick={() => setSeriesFilter(value)} className="rounded-xl border px-4 py-2">{value === 'all' ? 'All series' : value === 'free' ? 'Free' : 'Paid'}</button>)}<button onClick={() => void loadBatches()}>Refresh</button></div>
-                  {batchesError && <p role="alert">{batchesError}</p>}
-                  {loadingBatches && <p>Refreshing test series…</p>}
-                  {!loadingBatches && !batchesError && !batches.some(b => b.catalogVisible !== false && isTestSeries(b) && (seriesFilter === 'all' || (seriesFilter === 'free' ? b.isFree : !b.isFree))) && <p>No test series available in this category yet.</p>}
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">{batches.filter(b => b.catalogVisible !== false && isTestSeries(b) && (seriesFilter === 'all' || (seriesFilter === 'free' ? b.isFree : !b.isFree))).map(batch => <BatchCard key={batch.id} batch={batch} isEnrolled={enrolledBatchIds.includes(batch.id)} onEnrollFree={handleEnrollFreeBatch} onPurchaseClick={purchaseBatch} onViewLectures={viewLectures} />)}</div>
-                </section>}
+                {currentView === 'test-series' && <TestSeriesCatalog
+                  batches={batches} enrolledBatchIds={enrolledBatchIds}
+                  filter={seriesFilter} onFilterChange={setSeriesFilter}
+                  loading={loadingBatches} error={batchesError} onRefresh={loadBatches}
+                  onEnrollFree={handleEnrollFreeBatch} onPurchaseClick={purchaseBatch} onViewLectures={viewLectures}
+                />}
                 {currentView === 'free-batches' && (
                   <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10 space-y-8">
                     <div>
