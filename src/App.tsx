@@ -3,7 +3,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import {
   BookOpen, LogIn, LogOut, User as UserIcon, LayoutDashboard,
-  ShieldCheck, Search, Sparkles, X, Menu, Phone, Mail,
+  Search, Sparkles, X, Menu, Phone, Mail,
   MapPin, Check, Heart, HelpCircle, ChevronRight, ChevronLeft, ChevronDown, RefreshCw,
   Award, Clock, Flame, PlaySquare, FileText, Upload, Play, ArrowRight, GraduationCap, TrendingUp, Video, Smartphone, Send, Star
 } from 'lucide-react';
@@ -13,13 +13,12 @@ import AppleHero from './components/AppleHero';
 import BatchCard from './components/BatchCard';
 import CoursePlayer from './components/CoursePlayer';
 import StudentDashboard from './components/StudentDashboard';
-import AdminDashboard from './components/AdminDashboard';
 import PaymentModal from './components/PaymentModal';
 import { paymentRequest } from './lib/paymentClient';
 import { recoveryRequest } from './lib/supabaseClient';
 import PasswordRecovery from './components/PasswordRecovery';
 
-type AppView = 'test-series' | 'home' | 'free-batches' | 'paid-batches' | 'student-dashboard' | 'admin-dashboard' | 'profile' | 'player';
+type AppView = 'test-series' | 'home' | 'free-batches' | 'paid-batches' | 'student-dashboard' | 'profile' | 'player';
 
 export default function App() {
   // Navigation & View States
@@ -44,7 +43,6 @@ export default function App() {
   const [authError, setAuthError] = useState('');
 
   // Security & URL states
-  const [isAdminPath, setIsAdminPath] = useState(false);
   const [verificationCode, setVerificationCode] = useState('');
   const [verificationError, setVerificationError] = useState('');
   const [verificationSuccess, setVerificationSuccess] = useState('');
@@ -122,30 +120,6 @@ export default function App() {
     setNewReviewText('');
     setNewReviewRating(5);
   };
-
-  // Observe URL Path/Hash to identify if accessing admin panel
-  useEffect(() => {
-    const handleLocationCheck = () => {
-      const path = window.location.pathname;
-      const hash = window.location.hash;
-      const isAdm = path.endsWith('/admin') || path.endsWith('./admin') || hash.includes('admin');
-
-      setIsAdminPath(isAdm);
-
-      if (isAdm) {
-        if (user && user.role === 'admin') {
-          setCurrentView('admin-dashboard');
-        } else {
-          setCurrentView('home');
-          setAuthMode('login');
-        }
-      }
-    };
-
-    handleLocationCheck();
-    window.addEventListener('popstate', handleLocationCheck);
-    return () => window.removeEventListener('popstate', handleLocationCheck);
-  }, [user]);
 
   // -----------------------------------------------------------------
   // Initial Sync & Boot
@@ -332,12 +306,7 @@ export default function App() {
           localStorage.setItem('aura_session_token', data.token);
           setAuthMode(null);
           resetAuthForm();
-          // Route based on role
-          if (data.user.role === 'admin') {
-            setCurrentView('admin-dashboard');
-          } else {
-            setCurrentView('student-dashboard');
-          }
+          setCurrentView('student-dashboard');
         } else {
           setAuthError(data.error || 'Authentication failed.');
         }
@@ -463,9 +432,9 @@ export default function App() {
   };
 
   // Developer Quick reviewer access bypass
-  const handleQuickBypass = (role: 'student' | 'admin') => {
-    setEmail(role === 'admin' ? 'admin@carrier50.com' : 'student@carrier50.com');
-    setPassword(role === 'admin' ? 'admin123' : 'student123');
+  const handleQuickBypass = () => {
+    setEmail('student@carrier50.com');
+    setPassword('student123');
     setAuthMode('login');
   };
 
@@ -690,16 +659,7 @@ export default function App() {
               {/* User Session buttons */}
               {user ? (
                 <div className="flex items-center gap-4 text-xs font-bold">
-                  {user.role === 'admin' ? (
-                    <button
-                      id="nav-admin-dash-btn"
-                      onClick={() => setCurrentView('admin-dashboard')}
-                      className={`text-purple-600 flex items-center gap-1 hover:underline cursor-pointer ${currentView === 'admin-dashboard' ? 'underline' : ''}`}
-                    >
-                      <ShieldCheck className="w-3.5 h-3.5" />
-                      Admin Console
-                    </button>
-                  ) : (
+
                     <button
                       id="nav-stud-dash-btn"
                       onClick={() => setCurrentView('student-dashboard')}
@@ -708,7 +668,7 @@ export default function App() {
                       <LayoutDashboard className="w-3.5 h-3.5" />
                       Dashboard
                     </button>
-                  )}
+
 
                   <button
                     id="nav-profile-btn"
@@ -785,15 +745,11 @@ export default function App() {
 
               {user ? (
                 <>
-                  {user.role === 'admin' ? (
-                    <button onClick={() => { setCurrentView('admin-dashboard'); setMobileMenuOpen(false); }} className="p-4 text-left text-purple-600 flex items-center gap-1.5">
-                      <ShieldCheck className="w-4 h-4" /> Admin Console
-                    </button>
-                  ) : (
+
                     <button onClick={() => { setCurrentView('student-dashboard'); setMobileMenuOpen(false); }} className="p-4 text-left text-[#6D5DF6] flex items-center gap-1.5">
                       <LayoutDashboard className="w-4 h-4" /> Dashboard
                     </button>
-                  )}
+
                   <button onClick={() => { setCurrentView('profile'); setMobileMenuOpen(false); }} className="p-4 text-left flex items-center gap-1.5">
                     <UserIcon className="w-4 h-4" /> Profile Details
                   </button>
@@ -902,7 +858,7 @@ export default function App() {
                         isAuthenticated={!!user}
                         onGetStarted={() => {
                           if (user) {
-                            setCurrentView(user.role === 'admin' ? 'admin-dashboard' : 'student-dashboard');
+                            setCurrentView('student-dashboard');
                           } else {
                             setAuthMode('login');
                           }
@@ -1392,18 +1348,6 @@ onViewLectures={viewLectures}
 
 
                 {/* -------------------------------------------------------------
-                VIEW: ADMIN CMS DASHBOARD
-                ------------------------------------------------------------- */}
-                {currentView === 'admin-dashboard' && user && user.role === 'admin' && (
-                  <AdminDashboard
-                    batches={batches}
-                    onRefreshBatches={loadBatches}
-                    userId={user.id}
-                  />
-                )}
-
-
-                {/* -------------------------------------------------------------
                 VIEW: CINEMA COURSE LECTURES PLAYER
                 ------------------------------------------------------------- */}
                 {currentView === 'player' && activeBatchId && (
@@ -1413,7 +1357,7 @@ onViewLectures={viewLectures}
                     userId={user?.id || 'usr_anonymous'}
                     onBack={() => {
                       if (user) {
-                        setCurrentView(user.role === 'admin' ? 'admin-dashboard' : 'student-dashboard');
+                        setCurrentView('student-dashboard');
                       } else {
                         setCurrentView('home');
                       }
@@ -1628,44 +1572,32 @@ onViewLectures={viewLectures}
                 <>
                   {/* Header Title */}
                   <div className="text-center space-y-2 mb-6">
-                    <div className={`w-8 h-8 ${isAdminPath ? 'bg-purple-600' : 'bg-[#6D5DF6]'} text-white rounded-full flex items-center justify-center font-bold text-xs mx-auto`}>
+                    <div className={`w-8 h-8 bg-[#6D5DF6] text-white rounded-full flex items-center justify-center font-bold text-xs mx-auto`}>
                       C
                     </div>
                     <h3 className="text-xl font-extrabold text-gray-900 tracking-tight font-sans">
-                      {isAdminPath ? (
-                        'Carrier-50 Admin Panel'
-                      ) : (
-                        authMode === 'login' ? 'Login to Carrier-50' : 'Create Student Account'
-                      )}
+                      {authMode === 'login' ? 'Login to Carrier-50' : 'Create Student Account'}
                     </h3>
                     <p className="text-xs text-gray-400">
-                      {isAdminPath ? 'Authorized administrative login only' : 'Distraction-free learning awaits you'}
+                      Distraction-free learning awaits you
                     </p>
                   </div>
 
-                  {/* Bypass helpers inside Auth block (Conditional based on URL path) */}
-                  <div className={`p-3 border rounded-2xl mb-6 text-[10px] space-y-1.5 text-gray-600 ${isAdminPath ? 'bg-purple-50/50 border-purple-100' : 'bg-[#6D5DF6]/5 border-[#6D5DF6]/10'}`}>
+                  {/* Student reviewer quick access */}
+                  <div className={`p-3 border rounded-2xl mb-6 text-[10px] space-y-1.5 text-gray-600 bg-[#6D5DF6]/5 border-[#6D5DF6]/10`}>
                     <p className="font-bold text-gray-500 uppercase tracking-wider text-[9px]">
-                      {isAdminPath ? 'Carrier-50 Secure Admin Access' : 'Reviewer Quick Access'}
+                      Reviewer Quick Access
                     </p>
                     <div className="flex gap-2">
-                      {isAdminPath ? (
-                        <button
-                          id="bypass-login-admin-btn"
-                          onClick={() => handleQuickBypass('admin')}
-                          className="w-full bg-white hover:bg-gray-100 text-purple-600 py-1.5 border rounded-lg font-bold transition-all cursor-pointer text-[10px]"
-                        >
-                          Login as Admin (admin@carrier50.com)
-                        </button>
-                      ) : (
+
                         <button
                           id="bypass-login-student-btn"
-                          onClick={() => handleQuickBypass('student')}
+                          onClick={() => handleQuickBypass()}
                           className="w-full bg-white hover:bg-gray-100 text-[#6D5DF6] py-1.5 border rounded-lg font-bold transition-all cursor-pointer text-[10px]"
                         >
                           Login as Student (student@carrier50.com)
                         </button>
-                      )}
+
                     </div>
                   </div>
 
@@ -1677,7 +1609,7 @@ onViewLectures={viewLectures}
 
                   {/* Main Auth Form */}
                   <form onSubmit={handleAuthSubmit} className="space-y-4 text-xs font-medium">
-                    {authMode === 'register' && !isAdminPath && (
+                    {authMode === 'register' && (
                       <div className="space-y-1.5">
                         <label className="font-bold text-gray-600">Full Name</label>
                         <input
@@ -1698,7 +1630,7 @@ onViewLectures={viewLectures}
                         required
                         value={email}
                         onChange={(e) => setEmail(e.target.value)}
-                        placeholder={isAdminPath ? "admin@carrier50.com" : "student@carrier50.com"}
+                        placeholder="student@carrier50.com"
                         className="w-full px-3.5 py-2.5 border rounded-xl outline-none focus:ring-1 focus:ring-[#6D5DF6]"
                       />
                     </div>
@@ -1735,7 +1667,7 @@ onViewLectures={viewLectures}
                   </form>
 
                   {/* Toggles (Only display toggle options for student interface; admin is login-only) */}
-                  {!isAdminPath && (
+                  {(
                     <div className="mt-5 text-center text-xs">
                       {authMode === 'login' ? (
                         <p className="text-gray-400">

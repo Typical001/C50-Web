@@ -9,7 +9,7 @@ Last consolidated: 2026-11-09. Local source/configuration reviewed; historical t
 `Standalone Admin → Supabase Auth + admin-authorized database/Storage operations`
 `Razorpay → signed Express webhook → payment ledger/finalizer → enrollment`
 
-The Vite student UI and Express API deploy as one Render service. The separate Admin is a static application. There is also a legacy embedded Admin UI in the web app; supported payment/content fields must remain aligned while it is reachable. Backend implementation is in [server.ts](../server.ts) and [server modules](../server). No second mobile payment backend exists.
+The Vite student UI and Express API deploy as one Render service. The separate Admin is a static application. As of 2026-11-12 the embedded Admin UI has been removed from local Web source. The separate Admin is the sole management interface; backend Admin APIs and authorization remain intact. Hosted availability depends on deployment. Backend implementation is in [server.ts](../server.ts) and [server modules](../server). No second mobile payment backend exists.
 
 ## Authentication and authorization
 

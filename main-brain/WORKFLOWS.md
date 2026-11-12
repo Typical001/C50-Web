@@ -42,3 +42,7 @@ Follow the [updated checkout test/deployment procedure](../docs/payments.md). Ch
 In Admin → Batch Content Manager, select batch, subject and chapter, then add/edit a lecture. Paste a Drive PDF file-sharing URL into Notes PDF URL / Drive Link, optionally set Notes Title, use Open link to confirm the file and viewing permissions, then save. Alternatively retain Upload Note to Supabase. Folder links and non-HTTPS/credential-bearing URLs cannot be saved through this form. A valid link is not proof of PDF content or student access.
 
 Reopen the lecture to verify its saved link and PDF indicator. On the website open the lecture's Notes tab → PDF Notes; Drive opens in a new tab, while direct PDFs also retain the reader. On Android open the lecture → PDF Notes; entitlement is checked before opening the external handler. Drive may require a Google account with permission. Public sharing allows anyone with the link to view; do not treat that as private paid-content delivery. Publish/deploy updated applications and rebuild Android separately from saving content.
+
+## Management entry point — 2026-11-12
+
+Use the standalone Admin at https://c50-admin.netlify.app/ for content/payment management. Main-site accounts, including administrators, use the ordinary learning Dashboard and Profile; /admin and admin hashes no longer activate management UI. Backend Admin authorization remains enforced. Deploy the updated Web service before verifying removal on its hosted URL.

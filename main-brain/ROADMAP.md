@@ -37,3 +37,7 @@ Completed locally: responsive catalog styling and empty/loading/error states; Ty
 ## Drive notes acceptance — 2026-11-12
 
 Local implementation/builds, link-contract tests and browser fixture edit/save/reload/open-link checks complete. Pending: deploy Web/Admin, rebuild Android, verify a real per-lecture PDF with student Drive permissions and device handler, and exercise live authorized Admin add/save/reload. No database migration required. Public-link redistribution remains outside enrollment protection.
+
+## Embedded Admin retirement — 2026-11-12
+
+Completed locally: embedded management UI and entry points removed; TypeScript/build/recovery tests and local role/navigation fixtures verified. Pending: Web deployment and hosted desktop/mobile confirmation. Standalone Admin access and backend authorization remain independent and unchanged.
