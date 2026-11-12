@@ -1,4 +1,5 @@
-import React, { useState, useEffect } from 'react';
+import { isTestSeries } from './lib/testSeries';
+import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import {
   BookOpen, LogIn, LogOut, User as UserIcon, LayoutDashboard,
@@ -18,10 +19,12 @@ import { paymentRequest } from './lib/paymentClient';
 import { recoveryRequest } from './lib/supabaseClient';
 import PasswordRecovery from './components/PasswordRecovery';
 
-type AppView = 'home' | 'free-batches' | 'paid-batches' | 'student-dashboard' | 'admin-dashboard' | 'profile' | 'player';
+type AppView = 'test-series' | 'home' | 'free-batches' | 'paid-batches' | 'student-dashboard' | 'admin-dashboard' | 'profile' | 'player';
 
 export default function App() {
   // Navigation & View States
+  const [seriesFilter, setSeriesFilter] = useState<'all' | 'free' | 'paid'>('all');
+  const catalogRequest = useRef(0);
   const [currentView, setCurrentView] = useState<AppView>('home');
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [activeBatchId, setActiveBatchId] = useState<string | null>(null);
@@ -181,6 +184,8 @@ export default function App() {
     }
   }, [user]);
 
+  useEffect(() => { setBatches([]); }, [user?.id]);
+
   // Load payment history when navigating to profile
   useEffect(() => {
     if (user && currentView === 'profile') {
@@ -189,22 +194,33 @@ export default function App() {
   }, [user, currentView]);
 
   const loadBatches = async () => {
+    const ticket = ++catalogRequest.current;
+    const token = localStorage.getItem('aura_session_token');
     try {
       setLoadingBatches(true);
       setBatchesError('');
-      const res = await fetch('/api/batches');
+      const res = await fetch(token ? '/api/my-batches' : '/api/batches', { headers: token ? { Authorization: `Bearer ${token}` } : {}, signal: AbortSignal.timeout(20000) });
       const data = await res.json();
       if (!res.ok || !Array.isArray(data)) {
         throw new Error('Could not load courses. Please try again.');
       }
-      setBatches(data);
+      if (ticket === catalogRequest.current && token === localStorage.getItem('aura_session_token')) setBatches(data);
     } catch (err) {
       console.error('Failed to fetch batches:', err);
-      setBatchesError('Could not load courses. Please try again.');
+      if (ticket === catalogRequest.current) setBatchesError('Could not load courses. Please try again.');
     } finally {
-      setLoadingBatches(false);
+      if (ticket === catalogRequest.current) setLoadingBatches(false);
     }
   };
+
+  useEffect(() => {
+    const refresh = () => { if (document.visibilityState === 'visible') void loadBatches(); };
+    refresh();
+    const timer = setInterval(refresh, 30000);
+    document.addEventListener('visibilitychange', refresh);
+    window.addEventListener('focus', refresh);
+    return () => { catalogRequest.current++; clearInterval(timer); document.removeEventListener('visibilitychange', refresh); window.removeEventListener('focus', refresh); };
+  }, [currentView, user?.id]);
 
   const loadHomepage = async () => {
     try {
@@ -553,6 +569,7 @@ export default function App() {
                 { id: 'home', label: 'Home', action: () => setCurrentView('home') },
                 { id: 'foundation', label: 'MPPSC Foundation', action: () => setCurrentView('paid-batches') },
                 { id: 'free', label: 'Free Resources', action: () => setCurrentView('free-batches') },
+                { id: 'tests', label: 'Test Series', action: () => setCurrentView('test-series') },
                 { id: 'current-affairs', label: 'Current Affairs', action: () => setCurrentView('free-batches') },
                 {
                   id: 'about', label: 'About', action: () => {
@@ -571,7 +588,7 @@ export default function App() {
               ].map((item) => {
                 const isActive = (item.id === 'home' && currentView === 'home') ||
                   (item.id === 'foundation' && currentView === 'paid-batches') ||
-                  (item.id === 'free' && currentView === 'free-batches');
+                  (item.id === 'free' && currentView === 'free-batches') || (item.id === 'tests' && currentView === 'test-series');
                 const isHovered = hoveredNavItem === item.id;
 
                 // Show slider if hovered or if active and no other button is hovered
@@ -763,6 +780,7 @@ export default function App() {
             >
               <button onClick={() => { setCurrentView('home'); setMobileMenuOpen(false); }} className="p-4 text-left">Home</button>
               <button onClick={() => { setCurrentView('paid-batches'); setMobileMenuOpen(false); }} className="p-4 text-left">MPPSC Foundation</button>
+              <button onClick={() => { setCurrentView('test-series'); setMobileMenuOpen(false); }} className="p-4 text-left">Test Series</button>
               <button onClick={() => { setCurrentView('free-batches'); setMobileMenuOpen(false); }} className="p-4 text-left">Free Resources</button>
 
               {user ? (
@@ -964,7 +982,7 @@ export default function App() {
                         <div className="text-center py-12 text-gray-500">Loading course batches...</div>
                       ) : (
                         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-                          {batches.filter(b => !b.isFree).slice(0, 3).map((batch) => (
+                          {batches.filter(b => b.catalogVisible !== false && !b.isFree).slice(0, 3).map((batch) => (
                             <BatchCard
                               key={batch.id}
                               batch={batch}
@@ -1290,6 +1308,15 @@ onViewLectures={viewLectures}
                 {/* -------------------------------------------------------------
                 VIEW: FREE BATCHES CATALOG
                 ------------------------------------------------------------- */}
+                {currentView === 'test-series' && <section className="space-y-6">
+                  <h2 className="text-3xl font-bold">Test Series</h2>
+                  <p>Explore free and paid preparation series and their study content.</p>
+                  <div className="flex gap-3">{(['all','free','paid'] as const).map(value => <button key={value} aria-pressed={seriesFilter === value} onClick={() => setSeriesFilter(value)} className="rounded-xl border px-4 py-2">{value === 'all' ? 'All series' : value === 'free' ? 'Free' : 'Paid'}</button>)}<button onClick={() => void loadBatches()}>Refresh</button></div>
+                  {batchesError && <p role="alert">{batchesError}</p>}
+                  {loadingBatches && <p>Refreshing test series…</p>}
+                  {!loadingBatches && !batchesError && !batches.some(b => b.catalogVisible !== false && isTestSeries(b) && (seriesFilter === 'all' || (seriesFilter === 'free' ? b.isFree : !b.isFree))) && <p>No test series available in this category yet.</p>}
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">{batches.filter(b => b.catalogVisible !== false && isTestSeries(b) && (seriesFilter === 'all' || (seriesFilter === 'free' ? b.isFree : !b.isFree))).map(batch => <BatchCard key={batch.id} batch={batch} isEnrolled={enrolledBatchIds.includes(batch.id)} onEnrollFree={handleEnrollFreeBatch} onPurchaseClick={purchaseBatch} onViewLectures={viewLectures} />)}</div>
+                </section>}
                 {currentView === 'free-batches' && (
                   <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10 space-y-8">
                     <div>
@@ -1304,7 +1331,7 @@ onViewLectures={viewLectures}
                       <p className="text-gray-500">Loading course syllabus...</p>
                     ) : (
                       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-                        {batches.filter(b => b.isFree).map((batch) => (
+                        {batches.filter(b => b.catalogVisible !== false && b.isFree).map((batch) => (
                           <BatchCard
                             key={batch.id}
                             batch={batch}
@@ -1337,7 +1364,7 @@ onViewLectures={viewLectures}
                       <p className="text-gray-500">Loading premium classrooms...</p>
                     ) : (
                       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-                        {batches.filter(b => !b.isFree).map((batch) => (
+                        {batches.filter(b => b.catalogVisible !== false && !b.isFree).map((batch) => (
                           <BatchCard
                             key={batch.id}
                             batch={batch}

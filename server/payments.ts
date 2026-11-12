@@ -1,3 +1,4 @@
+import Razorpay from 'razorpay';
 import crypto from 'node:crypto';
 
 export class PaymentError extends Error {
@@ -26,7 +27,7 @@ export function rupeesToPaise(value: unknown): number {
   const match = /^(\d+)(?:\.(\d{1,2}))?$/.exec(String(value));
   if (!match) throw new PaymentError(400, 'Invalid batch price.');
   const result = BigInt(match[1]) * 100n + BigInt((match[2] || '').padEnd(2, '0'));
-  if (result <= 0n || result > BigInt(Number.MAX_SAFE_INTEGER)) throw new PaymentError(400, 'Invalid batch price.');
+  if (result < 100n || result > BigInt(Number.MAX_SAFE_INTEGER)) throw new PaymentError(400, 'Amount must be at least 100 paise and within the supported range.');
   return Number(result);
 }
 export function validSignature(body: string | Buffer, signature: unknown, secret: string): boolean {
@@ -34,22 +35,32 @@ export function validSignature(body: string | Buffer, signature: unknown, secret
   return crypto.timingSafeEqual(Buffer.from(signature, 'hex'), crypto.createHmac('sha256', secret).update(body).digest());
 }
 export function razorpayProvider(key: string, secret: string): Provider {
+  // Lazy construction keeps unconfigured environments usable for free content.
+  let client: Razorpay | undefined;
   return { async request(path, body) {
+    let timer: ReturnType<typeof setTimeout> | undefined;
     try {
-      const response = await fetch(`https://api.razorpay.com/v1/${path}`, {
-        method: body === undefined ? 'GET' : 'POST',
-        headers: { Authorization: `Basic ${Buffer.from(`${key}:${secret}`).toString('base64')}`, 'Content-Type': 'application/json' },
-        ...(body === undefined ? {} : { body: JSON.stringify(body) }),
-        signal: AbortSignal.timeout(12000)
-      });
-      if (!response.ok) throw new Error('Provider rejected request');
-      return await response.json();
-    } catch {
-      // Never return provider response bodies or credentials to clients/logs.
-      throw new PaymentError(503, 'Payment provider unavailable. Please retry confirmation shortly.');
-    }
+      client ??= new Razorpay({ key_id: key, key_secret: secret });
+      let request: Promise<unknown>;
+      if (path === 'orders' && body) request = client.orders.create(body as Parameters<typeof client.orders.create>[0]);
+      else if (path.startsWith('orders?receipt=')) {
+        const query = new URLSearchParams(path.split('?')[1]);
+        request = client.orders.all({ receipt: query.get('receipt') || '', count: 100 });
+      } else if (/^orders\/order_[A-Za-z0-9]+\/payments$/.test(path)) request = client.orders.fetchPayments(path.split('/')[1]);
+      else if (/^orders\/order_[A-Za-z0-9]+$/.test(path)) request = client.orders.fetch(path.split('/')[1]);
+      else if (/^payments\/pay_[A-Za-z0-9]+$/.test(path)) request = client.payments.fetch(path.split('/')[1]);
+      else throw new Error('Unsupported provider operation');
+      // A timeout is ambiguous: create() must reconcile by receipt, never repeat the POST.
+      return await Promise.race([request, new Promise<never>((_, reject) => {
+        timer = setTimeout(() => reject(new Error('Provider timeout')), 12000);
+      })]);
+    } catch (error: any) {
+      if (error?.statusCode === 401) throw new PaymentError(401, 'Payment provider authentication failed. Contact support.');
+      throw new PaymentError(500, 'Payment provider unavailable. Please retry confirmation shortly.');
+    } finally { if (timer) clearTimeout(timer); }
   } };
 }
+
 const providerId = (value: unknown, prefix: string): value is string => typeof value === 'string' && new RegExp(`^${prefix}_[A-Za-z0-9]{1,80}$`).test(value);
 const uuid = (value: unknown): value is string => typeof value === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value);
 export function onlyFields(body: any, fields: string[]) {
@@ -119,7 +130,7 @@ export class Payments {
     onlyFields(body, ['batchId']);
     if (!uuid(body.batchId)) throw new PaymentError(400, 'Invalid batch ID.');
     const batch = await this.store.batch(body.batchId);
-    if (!batch || !batch.is_active || !batch.is_paid || batch.is_free || !batch.payment_enabled) {
+    if (!batch || !batch.is_active || batch.catalog_visible === false || !batch.is_paid || batch.is_free || !batch.payment_enabled) {
       throw new PaymentError(400, 'This batch is not available for paid checkout.');
     }
     if (await this.store.access(user, batch.id)) throw new PaymentError(409, 'You already have access to this batch.');

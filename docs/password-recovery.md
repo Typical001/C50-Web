@@ -1,5 +1,8 @@
 # Password recovery deployment checklist
 
+> Status note (2026-11-09): this specialist runbook retains dated implementation history. Use [Main Brain current state](../main-brain/CURRENT-STATE.md) and [roadmap](../main-brain/ROADMAP.md) for reconciled build/deployment status. Older pending statements may be superseded; procedures remain subject to current source/configuration.
+
+
 The web flow uses Supabase's implicit recovery email flow: Supabase verifies the email link, then redirects with `type=recovery`, an access token and a refresh token. The application validates both tokens and the user in an isolated non-persistent session. It removes URL credentials, asks for a strong password twice and clears the recovery session on success. Bare/expired links never reuse an existing login. PKCE/custom token-hash email templates are not configured by this change and are rejected rather than silently falling back.
 
 ## Required hosted settings

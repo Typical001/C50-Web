@@ -14,7 +14,7 @@ function fixture() {
   const enrollments = new Map<string, string>();
   const orders = new Map<string, any>();
   const attempts = new Map<string, any>();
-  const batch = { id: batchId, is_active: true, is_paid: true, is_free: false, payment_enabled: true, price: 1000, discount_price: 999.99 };
+  const batch = { catalog_visible: true, id: batchId, is_active: true, is_paid: true, is_free: false, payment_enabled: true, price: 1000, discount_price: 999.99 };
   let finalizerError = false;
   const store: PaymentStore = {
     batch: async () => batch,
@@ -68,7 +68,8 @@ function fixture() {
 test('exact INR conversion and strict signatures', () => {
   assert.equal(rupeesToPaise('999.99'), 99999);
   assert.equal(rupeesToPaise('1000'), 100000);
-  for (const value of ['1.001', -1, 0, NaN, Infinity, '1e3', null]) assert.throws(() => rupeesToPaise(value));
+  assert.equal(rupeesToPaise('1'), 100);
+  for (const value of ['0.99', '0.01', '1.001', -1, 0, NaN, Infinity, '1e3', null]) assert.throws(() => rupeesToPaise(value));
   assert.equal(validSignature('body', hmac('body'), config.secret), true);
   assert.equal(validSignature('changed', hmac('body'), config.secret), false);
   assert.equal(validSignature('body', 'bad', config.secret), false);
@@ -192,4 +193,17 @@ test('raw Express webhook body validates before JSON parsing; changed bytes reje
     assert.equal((await send(raw)).status, 200);
     assert.equal((await send(JSON.stringify(JSON.parse(raw)))).status, 400);
   } finally { server.closeAllConnections(); await new Promise<void>(resolve => server.close(() => resolve())); }
+});
+
+
+test('removal blocks new orders but preserves delayed and duplicate capture reconciliation', async () => {
+  const f = fixture();
+  const order = await f.create();
+  f.batch.catalog_visible = false;
+  await assert.rejects(f.create());
+  f.capture(order.orderId);
+  await f.webhook(order.orderId, 'payment.captured', 'evt_archived_capture');
+  await f.webhook(order.orderId, 'payment.captured', 'evt_archived_capture');
+  assert.equal(f.enrollments.size, 1);
+  assert.equal(f.rows.size, 1);
 });

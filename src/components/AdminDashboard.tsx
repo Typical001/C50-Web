@@ -44,7 +44,8 @@ export default function AdminDashboard({ batches, onRefreshBatches, userId }: Ad
     language: 'English/Hindi',
     difficulty: 'Beginner' as 'Beginner' | 'Intermediate' | 'Advanced',
     tags: '',
-    category: 'Competitive Exams',
+    catalogVisible: true,
+      category: 'Competitive Exams',
     isFree: false,
     paymentEnabled: false,
     razorpayPaymentButtonId: '',
@@ -103,7 +104,8 @@ export default function AdminDashboard({ batches, onRefreshBatches, userId }: Ad
   const loadPayments = async () => {
     try {
       setLoading(true);
-      const res = await fetch('/api/admin/payments');
+      const res = await fetch('/api/admin/payments', { headers: { Authorization: `Bearer ${localStorage.getItem('aura_session_token') || ''}` } });
+      if (!res.ok) throw new Error('Unable to load payment records.');
       const data = await res.json();
       setPayments(data);
     } catch (err) {
@@ -190,6 +192,7 @@ export default function AdminDashboard({ batches, onRefreshBatches, userId }: Ad
       difficulty: batch.difficulty,
       tags: batch.tags.join(', '),
       category: batch.category,
+      catalogVisible: batch.catalogVisible !== false,
       isFree: batch.isFree,
       paymentEnabled: Boolean(batch.paymentEnabled),
       razorpayPaymentButtonId: batch.razorpayPaymentButtonId || '',
@@ -200,9 +203,9 @@ export default function AdminDashboard({ batches, onRefreshBatches, userId }: Ad
   };
 
   const handleDeleteBatchClick = async (id: string) => {
-    if (!window.confirm('Are you absolutely sure you want to delete this batch and all its associated chapters & lectures?')) return;
+    if (!window.confirm('Remove this item? Test Series are removed from sale only; their student access and records are preserved. Other batches are deleted.')) return;
     try {
-      const res = await fetch(`/api/batches/${id}`, { method: 'DELETE' });
+      const res = await fetch(`/api/batches/${id}`, { method: 'DELETE', headers: { Authorization: `Bearer ${localStorage.getItem('aura_session_token') || ''}` } });
       if (res.ok) {
         onRefreshBatches();
         if (selectedSyllabusBatch?.id === id) {
@@ -225,6 +228,7 @@ export default function AdminDashboard({ batches, onRefreshBatches, userId }: Ad
       language: 'English/Hindi',
       difficulty: 'Beginner',
       tags: '',
+      catalogVisible: true,
       category: 'Competitive Exams',
       isFree: false,
       paymentEnabled: false,
@@ -375,7 +379,7 @@ export default function AdminDashboard({ batches, onRefreshBatches, userId }: Ad
   const handleDeleteLectureClick = async (lecId: string) => {
     if (!window.confirm('Delete this video lecture permanently?')) return;
     try {
-      const res = await fetch(`/api/lectures/${lecId}`, { method: 'DELETE' });
+      const res = await fetch(`/api/lectures/${lecId}`, { method: 'DELETE', headers: { Authorization: `Bearer ${localStorage.getItem('aura_session_token') || ''}` } });
       if (res.ok && selectedSyllabusBatch) {
         loadSyllabus(selectedSyllabusBatch.id);
         onRefreshBatches();
@@ -418,7 +422,7 @@ export default function AdminDashboard({ batches, onRefreshBatches, userId }: Ad
   const handleDeleteAnnouncement = async (id: string) => {
     if (!window.confirm('Delete this announcement permanently?')) return;
     try {
-      const res = await fetch(`/api/announcements/${id}`, { method: 'DELETE' });
+      const res = await fetch(`/api/announcements/${id}`, { method: 'DELETE', headers: { Authorization: `Bearer ${localStorage.getItem('aura_session_token') || ''}` } });
       if (res.ok) {
         loadAnnouncements();
       }
@@ -486,6 +490,7 @@ export default function AdminDashboard({ batches, onRefreshBatches, userId }: Ad
               </h4>
 
               <form onSubmit={handleBatchFormSubmit} className="grid grid-cols-1 md:grid-cols-2 gap-6 text-sm">
+ <label><input type="checkbox" checked={batchForm.catalogVisible} onChange={e => setBatchForm({...batchForm, catalogVisible:e.target.checked})} /> Listed for sale</label><p>Use the Test Series tag for synchronized test-series listings.</p>
                 <div className="space-y-1.5">
                   <label className="font-semibold text-gray-700">Course Title</label>
                   <input
@@ -1282,7 +1287,7 @@ export default function AdminDashboard({ batches, onRefreshBatches, userId }: Ad
             {payments.length === 0 ? (
               <div className="text-center py-12 text-gray-400">
                 <DollarSign className="w-12 h-12 text-gray-100 mx-auto mb-2" />
-                <p className="text-sm">No transaction payloads found in local storage ledger.</p>
+                <p className="text-sm">No payment records found in Supabase.</p>
               </div>
             ) : (
               <div className="overflow-x-auto">

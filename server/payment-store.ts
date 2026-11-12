@@ -8,7 +8,7 @@ export function paymentStore(db: SupabaseClient): PaymentStore {
     return data;
   }
   const store: PaymentStore = {
-    batch: id => one(db.from('batches').select('id,price,discount_price,is_active,is_paid,is_free,payment_enabled').eq('id', id).maybeSingle()),
+    batch: id => one(db.from('batches').select('id,price,discount_price,is_active,is_paid,is_free,payment_enabled,catalog_visible').eq('id', id).maybeSingle()),
     access: (user, batch) => one(db.rpc('has_active_batch_access', { p_user_id: user, p_batch_id: batch })),
     get: id => one(db.from('payments').select('*').eq('id', id).maybeSingle()),
     byOrder: id => one(db.from('payments').select('*').eq('razorpay_order_id', id).maybeSingle()),

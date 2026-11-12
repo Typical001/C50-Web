@@ -26,6 +26,11 @@ test('browser order and verification requests contain only approved fields', asy
     assert.equal(requests[0].headers.Authorization, 'Bearer fixture-token');
     globalThis.fetch = async () => new Response(JSON.stringify({ error: 'Payment not found.' }), { status: 404 });
     await assert.rejects(createPurchase('batch'), /Payment not found/);
+    globalThis.fetch = async () => {
+      Object.defineProperty(globalThis, 'localStorage', { configurable: true, value: { getItem: () => 'different-account' } });
+      return new Response(JSON.stringify({ status: 'success', hasAccess: true }), { status: 200 });
+    };
+    await assert.rejects(createPurchase('batch'), /Account changed/);
   } finally {
     globalThis.fetch = original;
     if (descriptor) Object.defineProperty(globalThis, 'localStorage', descriptor); else delete (globalThis as any).localStorage;

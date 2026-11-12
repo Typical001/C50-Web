@@ -43,7 +43,7 @@ export default function PaymentModal({ batch, userId, onClose, onPaymentSuccess 
     starting.current = true; setPhase('busy'); setError('');
     try {
       const order = await createPurchase(batch.id);
-      if (!order.paymentId || !order.orderId || !order.keyId || order.currency !== 'INR' || !Number.isSafeInteger(order.amount) || order.amount <= 0) throw new Error('Invalid checkout order.');
+      if (!order.paymentId || !order.orderId || !order.keyId || order.currency !== 'INR' || !Number.isSafeInteger(order.amount) || order.amount < 100) throw new Error('Invalid checkout order.');
       sessionStorage.setItem(storageKey, order.paymentId); setPaymentId(order.paymentId); setAmount(order.amount / 100);
       await loadCheckout();
       if (!mounted.current) return;

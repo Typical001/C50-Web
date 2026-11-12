@@ -1,5 +1,8 @@
 # Account deletion request page
 
+> Status note (2026-11-09): this specialist runbook retains dated implementation history. Use [Main Brain current state](../main-brain/CURRENT-STATE.md) and [roadmap](../main-brain/ROADMAP.md) for reconciled build/deployment status. Older pending statements may be superseded; procedures remain subject to current source/configuration.
+
+
 Public target: https://c50-web.onrender.com/delete-account
 
 This is a manual email request flow, not an automatic deletion API or background job. Requests go to carrierdds50@gmail.com. The owner confirmed 30 days for processing and payment-record retention on November 1, 2026; the page defines the period as starting when ownership is verified. Confirm the policy is compatible with actual legal/accounting obligations before publishing. Legal/dispute exceptions and independent provider retention are disclosed, not given invented fixed periods.

@@ -16,6 +16,7 @@ export interface User {
 }
 
 export interface Batch {
+  catalogVisible?: boolean;
   id: string;
   title: string;
   description: string;
@@ -76,11 +77,17 @@ export interface Enrollment {
 }
 
 export interface Payment {
+  currency?: string;
+  amountPaise?: number;
+  gatewayMode?: string;
+  verifiedAt?: string;
+  paymentMethod?: string;
+  failureCode?: string;
   id: string;
   userId: string;
   batchId: string;
   amount: number;
-  status: 'pending' | 'success' | 'failed';
+  status: 'pending' | 'success' | 'failed' | 'refunded';
   razorpayPaymentId?: string;
   razorpayOrderId: string;
   createdAt: string;

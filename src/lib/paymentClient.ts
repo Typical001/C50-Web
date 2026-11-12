@@ -8,6 +8,7 @@ export async function paymentRequest(path: string, body?: unknown) {
     ...(body === undefined ? {} : { body: JSON.stringify(body) }), signal: AbortSignal.timeout(20000)
   });
   const data = await response.json();
+  if (token !== localStorage.getItem('aura_session_token')) throw new Error('Account changed. Please sign in again.');
   if (!response.ok) throw new Error(data.error || 'Unable to confirm payment. Please try again.');
   return data;
 }

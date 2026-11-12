@@ -1,5 +1,8 @@
 # Steps 4–5 — existing Express payment backend and Web/Admin Checkout
 
+> Status note (2026-11-09): this specialist runbook retains dated implementation history. Use [Main Brain current state](../main-brain/CURRENT-STATE.md) and [roadmap](../main-brain/ROADMAP.md) for reconciled build/deployment status. Older pending statements may be superseded; procedures remain subject to current source/configuration.
+
+
 Implemented 2026-09-06. Web Checkout and existing CMS controls are integrated into Downloads; Android checkout and external end-to-end testing remain. Do not release paid purchases to customers yet.
 
 ## Web/Admin operation
@@ -60,3 +63,15 @@ Run `npm run test:payments`, `npm run lint`, and `npm run build`. The automated 
 - [Razorpay Standard Checkout verification](https://razorpay.com/docs/payments/payment-gateway/web-integration/standard/integration-steps/)
 - [Raw webhook validation and event idempotency](https://razorpay.com/docs/webhooks/validate-test/)
 - [Orders and receipt lookup](https://razorpay.com/docs/api/orders/fetch-all/)
+
+## November 12, 2026 completion and test procedure
+
+This dated update supersedes the historical Android-not-implemented/local-env-unchanged statements above: native direct checkout exists, and local backend test credentials are now configured. Historical hosted observations are not current deployment evidence. SDK 2.9.8 is installed; minimum order amount is 100 paise. November 12 Web payment/client suite: 19 passing tests, recovery suite: 7; Web/backend and Admin builds passed; Android TypeScript and 39 tests passed. Supabase columns/policies and read-only Razorpay credential authentication were checked. No actual payment was made.
+
+1. In `C50-Project`, run `npm ci`, then `npm run dev` (default port 3000). The ignored `.env` needs backend `RAZORPAY_KEY_ID`, `RAZORPAY_KEY_SECRET`, matching `RAZORPAY_WEBHOOK_SECRET` and existing Supabase/session configuration. Never prefix secrets with `VITE_` or `EXPO_PUBLIC_`.
+2. In `admin-panel`, run `npm ci` and `npm run dev`; use its configured Supabase project and an authorized administrator. Configure a dedicated test paid batch/series with payment enabled and price at least INR 1. Do not enable real customer purchases for this test.
+3. Sign in to the website as a test student, select that item and click its purchase button. Complete Razorpay Test-mode Checkout; verify status, exactly one Supabase payment/enrollment and access. Check the Admin Payments page with test/status filters and refresh; check the same user's Android access. For native purchases use a rebuilt direct APK pointed at the same reachable backend; Expo Go/Play builds are not checkout test targets.
+4. Test modal dismiss, failure, invalid/missing signature, wrong user, repeat callback/webhook, network loss after capture, restart/status retry and account switching. A dismissed/pending payment must not unlock content; retry reconciliation must not duplicate enrollments.
+5. Before hosted testing, deploy Web/backend and Admin with correct environment settings. Confirm automatic capture in Razorpay and configure HTTPS `/api/payments/razorpay/webhook` with matching webhook secret and `payment.captured`, `order.paid`, `payment.failed` events. Verify delivery in the provider dashboard and persisted webhook metadata. Existing historical webhook settings were not reconfigured in this task.
+
+The Admin ledger is read-only, paginated and refreshed; no separate payment database is needed. Automated tests do not substitute for an actual browser/device checkout and webhook-delivery test. Test records remain labelled; live activation and settlement/refund workflows require separate verification.

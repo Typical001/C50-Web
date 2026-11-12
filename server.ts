@@ -1,3 +1,4 @@
+import { isTestSeries } from './src/lib/testSeries';
 import express from 'express';
 import path from 'path';
 import fs from 'fs';
@@ -929,6 +930,7 @@ function mapBatch(b: any): Batch {
     lastUpdated: b.last_updated || b.created_at || new Date().toISOString(),
     isFree: Boolean(b.is_free),
     isPaid: Boolean(b.is_paid),
+    catalogVisible: b.catalog_visible !== false,
     paymentEnabled: Boolean(b.payment_enabled),
     razorpayPaymentButtonId: b.razorpay_payment_button_id || '',
     customTag: b.custom_tag || ''
@@ -986,8 +988,14 @@ function mapPayment(payment: any): Payment {
     batchId: payment.batch_id,
     amount: Number(payment.amount) || 0,
     status: payment.status,
-    razorpayOrderId: payment.gateway_order_id || '',
-    razorpayPaymentId: payment.gateway_payment_id || '',
+    currency: payment.currency || 'INR',
+    amountPaise: payment.amount_paise,
+    gatewayMode: payment.gateway_mode,
+    verifiedAt: payment.verified_at,
+    paymentMethod: payment.payment_method,
+    failureCode: payment.failure_code,
+    razorpayOrderId: payment.razorpay_order_id || payment.gateway_order_id || '',
+    razorpayPaymentId: payment.razorpay_payment_id || payment.gateway_payment_id || '',
     createdAt: payment.created_at
   };
 }
@@ -1083,18 +1091,28 @@ app.put('/api/homepage', requireAdmin, async (req, res) => {
 // -------------------------------------------------------------
 // Batches & CMS Endpoints
 // -------------------------------------------------------------
+// Authenticated catalog includes retained purchases for the dashboard, never another user's records.
+app.get('/api/my-batches', requireAuth, async (req: AuthenticatedRequest, res) => {
+  try {
+    const { data, error } = await supabaseAdmin.from('batches').select('*').eq('is_active', true);
+    if (error) throw error;
+    const allowed = await Promise.all((data || []).map(async b =>
+      b.catalog_visible || req.user!.role === 'admin' || await hasActiveBatchAccess(req.user!.id, b.id) ? b : null));
+    res.json(allowed.filter(Boolean).map(mapBatch));
+  } catch { res.status(503).json({ error: 'Unable to load catalog.' }); }
+});
+
 app.get('/api/batches', async (req, res) => {
   try {
     // Server-only client; explicitly expose active catalog metadata through mapBatch.
     const { data, error } = await supabaseAdmin
       .from('batches')
       .select('*')
-      .eq('category', 'MPPSC')
-      .eq('is_active', true)
+      .eq('is_active', true).eq('catalog_visible', true)
       .order('created_at', { ascending: false });
 
     if (error) throw error;
-    res.json((data || []).map(mapBatch));
+    res.json((data || []).filter(b => b.category === 'MPPSC' || isTestSeries(b)).map(mapBatch));
   } catch (err: any) {
     res.status(500).json({ error: err.message });
   }
@@ -1110,7 +1128,7 @@ app.get('/api/batches/:id', async (req, res) => {
       .maybeSingle();
 
     if (error) throw error;
-    if (!data) return res.status(404).json({ error: 'Batch not found.' });
+    if (!data || data.catalog_visible === false) return res.status(404).json({ error: 'Batch not found.' });
     res.json(mapBatch(data));
   } catch (err: any) {
     res.status(500).json({ error: err.message });
@@ -1154,6 +1172,8 @@ app.post('/api/batches', requireAdmin, async (req, res) => {
         ...paymentFields,
         is_active: true,
         category: 'MPPSC',
+        tags: Array.isArray(req.body.tags) ? req.body.tags : [],
+        catalog_visible: req.body.catalogVisible !== false,
         custom_tag: customTag || null
       }])
       .select()
@@ -1190,6 +1210,8 @@ app.put('/api/batches/:id', requireAdmin, async (req, res) => {
         is_free: isFree !== undefined ? Boolean(isFree) : undefined,
         is_paid: isFree !== undefined ? !isFree : undefined,
         ...paymentFields,
+        tags: Array.isArray(req.body.tags) ? req.body.tags : current.tags,
+        catalog_visible: typeof req.body.catalogVisible === 'boolean' ? req.body.catalogVisible : current.catalog_visible,
         custom_tag: customTag || null,
         last_updated: new Date().toISOString()
       })
@@ -1206,13 +1228,13 @@ app.put('/api/batches/:id', requireAdmin, async (req, res) => {
 
 app.delete('/api/batches/:id', requireAdmin, async (req, res) => {
   try {
-    const { error } = await supabase
-      .from('batches')
-      .delete()
-      .eq('id', req.params.id);
+    const { data: current, error: lookupError } = await supabaseAdmin.from('batches').select('*').eq('id', req.params.id).single();
+    if (lookupError) throw lookupError;
+    const query = supabaseAdmin.from('batches');
+    const { error } = await (isTestSeries(current) ? query.update({ catalog_visible: false }) : query.delete()).eq('id', req.params.id);
 
     if (error) throw error;
-    res.json({ message: 'Batch and associated metadata deleted successfully' });
+    res.json({ message: 'Catalog removal completed; test series records are retained.' });
   } catch (err: any) {
     res.status(500).json({ error: err.message });
   }
@@ -1639,11 +1661,11 @@ app.post('/api/enrollments', requireAuth, async (req: AuthenticatedRequest, res)
     const database = getSupabaseAdmin();
     const { data: batch, error: batchError } = await database
       .from('batches')
-      .select('id, is_paid, is_active')
+      .select('id, is_paid, is_active, catalog_visible')
       .eq('id', batchId)
       .single();
     if (batchError || !batch) return res.status(404).json({ error: 'Batch not found.' });
-    if (batch.is_paid || !batch.is_active) {
+    if (batch.is_paid || !batch.is_active || batch.catalog_visible === false) {
       return res.status(400).json({ error: 'Only active free batches can be enrolled through this endpoint.' });
     }
 
@@ -1914,7 +1936,7 @@ app.get('/api/search', async (req, res) => {
     const pattern = `%${query.replace(/[%_]/g, '\\$&')}%`;
     const database = getSupabaseAdmin();
     const [batches, subjects, lectures] = await Promise.all([
-      database.from('batches').select('*').eq('is_active', true).or(`title.ilike.${pattern},description.ilike.${pattern},instructor.ilike.${pattern}`).limit(20),
+      database.from('batches').select('*').eq('is_active', true).eq('catalog_visible', true).or(`title.ilike.${pattern},description.ilike.${pattern},instructor.ilike.${pattern}`).limit(20),
       Promise.resolve({ data: [], error: null }),
       Promise.resolve({ data: [], error: null })
     ]);

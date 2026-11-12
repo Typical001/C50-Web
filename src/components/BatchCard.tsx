@@ -143,7 +143,7 @@ export default function BatchCard({ batch, isEnrolled, onEnrollFree, onPurchaseC
               >
                 Start Learning
               </button>
-            ) : batch.isFree ? (
+            ) : batch.catalogVisible === false ? (<span>No longer available for new enrollment</span>) : batch.isFree ? (
               <button
                 id={`enroll-btn-${batch.id}`}
                 onClick={() => onEnrollFree(batch.id)}
