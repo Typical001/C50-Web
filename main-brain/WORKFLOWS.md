@@ -36,3 +36,9 @@ After deployment, record revision/deploy ID/date and test public homepage/catalo
 ## Payment verification — 2026-11-12
 
 Follow the [updated checkout test/deployment procedure](../docs/payments.md). Check the same student purchase on website, direct Android and Admin Payments; pending/cancelled payments cannot grant access. Local checks passed as recorded in CURRENT-STATE; hosted deployment and actual payment/webhook/device tests remain outstanding.
+
+## Per-lecture Google Drive PDF notes — 2026-11-12
+
+In Admin → Batch Content Manager, select batch, subject and chapter, then add/edit a lecture. Paste a Drive PDF file-sharing URL into Notes PDF URL / Drive Link, optionally set Notes Title, use Open link to confirm the file and viewing permissions, then save. Alternatively retain Upload Note to Supabase. Folder links and non-HTTPS/credential-bearing URLs cannot be saved through this form. A valid link is not proof of PDF content or student access.
+
+Reopen the lecture to verify its saved link and PDF indicator. On the website open the lecture's Notes tab → PDF Notes; Drive opens in a new tab, while direct PDFs also retain the reader. On Android open the lecture → PDF Notes; entitlement is checked before opening the external handler. Drive may require a Google account with permission. Public sharing allows anyone with the link to view; do not treat that as private paid-content delivery. Publish/deploy updated applications and rebuild Android separately from saving content.

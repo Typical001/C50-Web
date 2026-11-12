@@ -33,3 +33,7 @@ The September 7 webhook setup and October 27 recovery redirect correction are co
 ## Test Series UI acceptance — 2026-11-12
 
 Completed locally: responsive catalog styling and empty/loading/error states; TypeScript/build and local browser fixture checks passed (details in CURRENT-STATE). Pending: deploy Web and confirm the same layout and real published-series content on the hosted site. This UI change does not resolve outstanding payment/device release verification.
+
+## Drive notes acceptance — 2026-11-12
+
+Local implementation/builds, link-contract tests and browser fixture edit/save/reload/open-link checks complete. Pending: deploy Web/Admin, rebuild Android, verify a real per-lecture PDF with student Drive permissions and device handler, and exercise live authorized Admin add/save/reload. No database migration required. Public-link redistribution remains outside enrollment protection.

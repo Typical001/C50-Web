@@ -1,3 +1,4 @@
+import { notesLink } from '../lib/notesLink';
 import React, { useState, useEffect } from 'react';
 import { 
   ChevronLeft, ChevronRight, Play, FileText, Download, CheckCircle, 
@@ -676,7 +677,7 @@ export default function CoursePlayer({ batchId, batchTitle, userId, onBack }: Co
             {/* Notes Tab */}
             {activeTab === 'notes' && (
               <div className="space-y-6">
-                {activeLecture.notesUrl ? (
+                {notesLink(activeLecture.notesUrl) ? (
                   <div className="space-y-4">
                     <div className="flex items-center justify-between p-4 bg-emerald-50/50 rounded-2xl border border-emerald-500/10">
                       <div className="flex items-center gap-3">
@@ -690,37 +691,38 @@ export default function CoursePlayer({ batchId, batchTitle, userId, onBack }: Co
                       </div>
                       <a
                         id="download-notes-btn"
-                        href={activeLecture.notesUrl}
-                        download
+                        href={notesLink(activeLecture.notesUrl)!.url}
+                        target="_blank" rel="noopener noreferrer"
                         className="p-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl shadow transition-colors flex items-center gap-1.5 text-xs font-semibold cursor-pointer"
                       >
                         <Download className="w-4 h-4" />
-                        Download PDF
+                        PDF Notes
                       </a>
                     </div>
 
-                    {/* Inline PDF Viewer */}
-                    <div className="border border-gray-100 rounded-2xl overflow-hidden shadow-inner">
+                    {/* Only direct PDF URLs use the embedded reader; Drive opens externally. */}
+                    {notesLink(activeLecture.notesUrl)?.embed ? <div className="border border-gray-100 rounded-2xl overflow-hidden shadow-inner">
                       <div className="bg-gray-50 px-4 py-3 border-b border-gray-100 flex items-center justify-between">
                         <span className="text-xs font-bold text-gray-600 flex items-center gap-1.5">
                           <Sparkles className="w-3.5 h-3.5 text-[#0071e3]" />
                           Embedded Smart Reader
                         </span>
-                        <span className="text-[10px] uppercase font-bold text-gray-400">Page 1 of 1</span>
+
                       </div>
                       <div className="bg-[#525659] py-8 px-4 flex justify-center min-h-[400px]">
                         <iframe 
-                          src={`${activeLecture.notesUrl}#toolbar=0`} 
+                          title="PDF notes preview"
+                          src={notesLink(activeLecture.notesUrl)!.url}
                           className="w-full max-w-2xl bg-white shadow-2xl rounded-sm"
                           style={{ height: '450px' }}
                         />
                       </div>
-                    </div>
+                    </div> : <p className="text-sm text-gray-500">Open PDF Notes to view the file in a new tab. For Google Drive, sign in with an account that has permission if requested.</p>}
                   </div>
                 ) : (
                   <div className="text-center py-10 text-gray-400 text-sm">
                     <FileText className="w-10 h-10 text-gray-300 mx-auto mb-2" />
-                    No study notes uploaded for this specific lecture. Check back soon!
+                    {activeLecture.notesUrl ? 'This notes link is unavailable. Please contact support.' : 'No study notes uploaded for this specific lecture. Check back soon!'}
                   </div>
                 )}
               </div>
