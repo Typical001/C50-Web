@@ -46,3 +46,7 @@ Reopen the lecture to verify its saved link and PDF indicator. On the website op
 ## Management entry point — 2026-11-12
 
 Use the standalone Admin at https://c50-admin.netlify.app/ for content/payment management. Main-site accounts, including administrators, use the ordinary learning Dashboard and Profile; /admin and admin hashes no longer activate management UI. Backend Admin authorization remains enforced. Deploy the updated Web service before verifying removal on its hosted URL.
+
+## Confirmation callback distinction — 2026-11-13
+
+Email confirmation and password recovery now have separate UI handling; untyped Site URL errors are neutral, and only recovery context opens the reset form. POST /api/auth/resend-confirmation is rate-limited, validates email and invokes Supabase signup resend with the validated APP_URL root redirect. It never resets a password or bypasses confirmation. Local checks passed as recorded in CURRENT-STATE; deployment and a real fresh-email/login round trip remain pending. Supabase Site URL should be the website root and Redirect URLs must allow that root and /reset-password; retain default confirmation verification links rather than linking straight to the application. Configuration/template values were not changed or live-verified in this task. Use the newest confirmation email; use Forgot Password only for recovery.

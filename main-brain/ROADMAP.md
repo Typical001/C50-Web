@@ -41,3 +41,7 @@ Local implementation/builds, link-contract tests and browser fixture edit/save/r
 ## Embedded Admin retirement — 2026-11-12
 
 Completed locally: embedded management UI and entry points removed; TypeScript/build/recovery tests and local role/navigation fixtures verified. Pending: Web deployment and hosted desktop/mobile confirmation. Standalone Admin access and backend authorization remain independent and unchanged.
+
+## Confirmation callback distinction — 2026-11-13
+
+Email confirmation and password recovery now have separate UI handling; untyped Site URL errors are neutral, and only recovery context opens the reset form. POST /api/auth/resend-confirmation is rate-limited, validates email and invokes Supabase signup resend with the validated APP_URL root redirect. It never resets a password or bypasses confirmation. Local checks passed as recorded in CURRENT-STATE; deployment and a real fresh-email/login round trip remain pending. Supabase Site URL should be the website root and Redirect URLs must allow that root and /reset-password; retain default confirmation verification links rather than linking straight to the application. Configuration/template values were not changed or live-verified in this task. Use the newest confirmation email; use Forgot Password only for recovery.

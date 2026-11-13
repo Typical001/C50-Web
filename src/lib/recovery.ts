@@ -11,7 +11,9 @@ export function parseRecoveryUrl(url: string): RecoveryRequest {
   const query = parsed.searchParams;
   const get = (key: string) => hash.get(key) || query.get(key);
   const resetPath = /^\/reset-password\/?$/.test(parsed.pathname);
-  // Supabase can send failures to Site URL (/), not only the requested path.
+  // Untyped Site URL errors may belong to confirmation, not recovery.
+  if (get('type') && get('type') !== 'recovery') return { kind: 'none' };
+  if (!resetPath && get('type') !== 'recovery') return { kind: 'none' };
   if (get('error') || get('error_code') || get('error_description')) {
     return { kind: 'error', message: INVALID_LINK };
   }
@@ -48,4 +50,18 @@ export function recoveryInitializer(request: RecoveryRequest, auth: RecoveryAuth
     if (verified.error || !verified.data.user || verified.data.user.id !== result.data.session.user.id) throw new Error(INVALID_LINK);
     return verified.data.user.id;
   })();
+}
+
+export function emailLinkNotice(url: string): string | null {
+  if (parseRecoveryUrl(url).kind !== 'none') return null;
+  const parsed = new URL(url);
+  const hash = new URLSearchParams(parsed.hash.slice(1));
+  const get = (key: string) => hash.get(key) || parsed.searchParams.get(key);
+  if (get('error') || get('error_code') || get('error_description')) {
+    return 'This email link is invalid, expired, or already used. For email confirmation, request a new confirmation email below. For a password reset, use Forgot Password.';
+  }
+  if (get('type') === 'signup' || /^\/auth\/confirm\/?$/.test(parsed.pathname)) {
+    return 'Email confirmation link received. Sign in to check confirmation. If your email is still unconfirmed, request a fresh confirmation email below.';
+  }
+  return null;
 }

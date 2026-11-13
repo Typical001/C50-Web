@@ -1,17 +1,18 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { parseRecoveryUrl, recoveryInitializer, passwordError } from '../src/lib/recovery';
+import { parseRecoveryUrl, recoveryInitializer, passwordError, emailLinkNotice } from '../src/lib/recovery';
 import { recoveryRedirect } from './recovery-config';
 
-test('homepage Supabase failures are recognized without decoding arbitrary text twice', () => {
+test('untyped email failures do not become password recovery', () => {
   for (const suffix of ['#error=access_denied&error_code=otp_expired&error_description=bad%25', '?error=access_denied', '#error_description=invalid']) {
-    assert.equal(parseRecoveryUrl(`https://c50.test/${suffix}`).kind, 'error');
+    assert.equal(parseRecoveryUrl(`https://c50.test/${suffix}`).kind, 'none');
+    assert.match(emailLinkNotice(`https://c50.test/${suffix}`)!, /confirmation/);
   }
 });
 
 test('only complete recovery token pairs are accepted; no session fallback', () => {
-  for (const suffix of ['/reset-password', '/reset-password/', '/reset-password?token=old&email=a%40b.com', '/reset-password?code=unsupported', '/reset-password#type=recovery&access_token=a', '/reset-password#type=signup&access_token=a&refresh_token=b']) {
+  for (const suffix of ['/reset-password', '/reset-password/', '/reset-password?token=old&email=a%40b.com', '/reset-password?code=unsupported', '/reset-password#type=recovery&access_token=a']) {
     assert.equal(parseRecoveryUrl(`https://c50.test${suffix}`).kind, 'error');
   }
   assert.equal(parseRecoveryUrl('https://c50.test/').kind, 'none');
@@ -63,4 +64,15 @@ test('UI uses confirmation and disables changes until verified; old endpoint is 
   const server = readFileSync(new URL('./../server.ts', import.meta.url), 'utf8');
   assert.match(server, /status\(410\)/);
   assert.doesNotMatch(server, /refresh_token: ''/);
+});
+
+test('confirmation callbacks never invoke recovery, including misdirected signup links', () => {
+  for (const path of ['/', '/auth/confirm', '/reset-password']) {
+    const url = `https://c50.test${path}#type=signup&access_token=a&refresh_token=b`;
+    assert.equal(parseRecoveryUrl(url).kind, 'none');
+    assert.match(emailLinkNotice(url)!, /confirmation/);
+  }
+  assert.equal(parseRecoveryUrl('https://c50.test/reset-password#error=access_denied').kind, 'error');
+  assert.equal(parseRecoveryUrl('https://c50.test/#type=recovery&error_code=otp_expired').kind, 'error');
+  assert.equal(emailLinkNotice('https://c50.test/#type=recovery&access_token=a&refresh_token=b'), null);
 });

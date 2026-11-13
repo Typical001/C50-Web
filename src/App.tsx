@@ -15,7 +15,7 @@ import CoursePlayer from './components/CoursePlayer';
 import StudentDashboard from './components/StudentDashboard';
 import PaymentModal from './components/PaymentModal';
 import { paymentRequest } from './lib/paymentClient';
-import { recoveryRequest } from './lib/supabaseClient';
+import { recoveryRequest, confirmationNotice } from './lib/supabaseClient';
 import PasswordRecovery from './components/PasswordRecovery';
 
 type AppView = 'test-series' | 'home' | 'free-batches' | 'paid-batches' | 'student-dashboard' | 'profile' | 'player';
@@ -41,6 +41,8 @@ export default function App() {
   const [regName, setRegName] = useState('');
   const [regRole, setRegRole] = useState<'student' | 'admin'>('student');
   const [authError, setAuthError] = useState('');
+  const [emailNotice, setEmailNotice] = useState(confirmationNotice || '');
+  const [resendingConfirmation, setResendingConfirmation] = useState(false);
 
   // Security & URL states
   const [verificationCode, setVerificationCode] = useState('');
@@ -145,6 +147,10 @@ export default function App() {
       setShowReset(true);
     }
 
+    if (confirmationNotice) {
+      window.history.replaceState(null, '', '/');
+      setAuthMode('login');
+    }
     loadBatches();
     loadHomepage();
   }, []);
@@ -335,6 +341,23 @@ export default function App() {
       console.error('Auth request failed:', err);
       setAuthError('Connection error. Please try again.');
     }
+  };
+
+  const resendConfirmation = async () => {
+    if (resendingConfirmation) return;
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) {
+      setEmailNotice('Enter your email address first, then resend confirmation.'); return;
+    }
+    setResendingConfirmation(true);
+    try {
+      const response = await fetch('/api/auth/resend-confirmation', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email: email.trim() })
+      });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error || 'Unable to resend. Please try again later.');
+      setEmailNotice(result.message);
+    } catch (error) { setEmailNotice(error instanceof Error ? error.message : 'Unable to resend. Please try again later.'); }
+    finally { setResendingConfirmation(false); }
   };
 
   const handleLogout = () => {
@@ -1601,6 +1624,8 @@ onViewLectures={viewLectures}
                     </div>
                   </div>
 
+                  {emailNotice && <p role="status" className="mb-4 rounded-xl bg-indigo-50 p-3 text-sm text-indigo-800">{emailNotice}</p>}
+                  {authMode === 'login' && <button type="button" disabled={resendingConfirmation} onClick={resendConfirmation} className="mb-4 text-sm font-semibold text-[#6D5DF6] underline disabled:opacity-50">{resendingConfirmation ? 'Sending…' : 'Resend confirmation email'}</button>}
                   {authError && (
                     <div className="p-3 bg-red-50 text-red-600 rounded-xl mb-4 text-xs font-semibold">
                       {authError}

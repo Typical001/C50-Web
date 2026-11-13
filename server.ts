@@ -785,6 +785,7 @@ app.post('/api/auth/register', async (req, res) => {
       email: email.trim(),
       password,
       options: {
+        emailRedirectTo: recoveryRedirect(APP_URL, process.env.NODE_ENV === 'production').replace('/reset-password', '/'),
         data: {
           name: name.trim(),
           role: role || 'student'
@@ -839,6 +840,22 @@ app.post('/api/auth/register', async (req, res) => {
 // Secure endpoint to verify email with a 6-digit code (auto-success on Supabase)
 app.post('/api/auth/verify-email', (req, res) => {
   res.json({ success: true, message: 'Your email address has been successfully verified.' });
+});
+
+// Resend only signup confirmation; never reset a password or mark an account verified.
+app.post('/api/auth/resend-confirmation', rateLimitAuth, async (req, res) => {
+  const email = req.body?.email;
+  if (typeof email !== 'string' || email.trim().length > 254 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) {
+    return res.status(400).json({ error: 'Enter a valid email address.' });
+  }
+  try {
+    const emailRedirectTo = recoveryRedirect(APP_URL, process.env.NODE_ENV === 'production').replace('/reset-password', '/');
+    const { error } = await supabase.auth.resend({ type: 'signup', email: email.trim(), options: { emailRedirectTo } });
+    if (error) return res.status(503).json({ error: 'Unable to send confirmation right now. Please wait a few minutes and retry.' });
+    return res.json({ message: 'If this account needs confirmation, a confirmation email has been requested. Open the newest email, then sign in.' });
+  } catch {
+    return res.status(503).json({ error: 'Confirmation email is temporarily unavailable. Please try again later.' });
+  }
 });
 
 // Secure endpoint to request a password reset token

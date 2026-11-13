@@ -22,3 +22,11 @@ The backend rejects malformed emails and insecure/local production APP_URL value
 ## Operational status (2026-10-27)
 
 Follow-up browser verification: the fix is deployed (live bundle index-C7nbBxqU.js; local repository commit 7335910). Corrected the hosted Site URL from localhost to https://c50-web.onrender.com and added https://c50-web.onrender.com/reset-password to the allow-list, preserving both local-development entries. Verified the saved dashboard list and the live expired-link/resend UI. The email template and successful real-email recovery remain unverified. The user must request a fresh email and complete the reset/login. No email sent, password changed, or live user session revoked during this task.
+
+## Email confirmation/reset routing correction — 2026-11-13
+
+Fixed the parser that classified every Supabase callback error as password recovery. Only an explicit recovery type or reset-password path enters recovery; explicit non-recovery types take precedence. Untyped errors at the Site URL show neutral email-link guidance, not a reset form. Signup callbacks show a sign-in notice without claiming verified status; callback tokens/errors are removed from the address bar and are not auto-consumed into a session. Password recovery retains its token-pair/user validation.
+
+Added rate-limited POST /api/auth/resend-confirmation accepting only an email for the signup resend operation, with generic success and sanitized failure feedback. Login exposes Resend confirmation email. Signup and resend explicitly request the validated APP_URL root as email redirect; password recovery still targets /reset-password. No password, email confirmation status or user role is changed by the UI callback itself.
+
+Verified: Web TypeScript, 8 recovery tests and production build passed. Headless Edge local fixtures verified generic/expired email errors and signup callbacks do not show Reset your password, callback URL scrubbing, resend email validation/request payload, and genuine recovery error UI. No email was sent, no real confirmation/reset token consumed, no database changes and no deployment performed. Existing bundle-size warning remains. Actual newest-email confirmation and subsequent login remain pending after deployment.
