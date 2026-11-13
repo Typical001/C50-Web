@@ -2,7 +2,7 @@ import Razorpay from 'razorpay';
 import crypto from 'node:crypto';
 
 export class PaymentError extends Error {
-  constructor(public status: number, message: string) { super(message); }
+  constructor(public status: number, message: string, public code?: string) { super(message); }
 }
 export type Purchase = {
   id: string; user_id: string; batch_id: string; amount: number; amount_paise: number;
@@ -34,13 +34,13 @@ export function validSignature(body: string | Buffer, signature: unknown, secret
   if (typeof signature !== 'string' || !/^[a-f0-9]{64}$/i.test(signature) || !secret) return false;
   return crypto.timingSafeEqual(Buffer.from(signature, 'hex'), crypto.createHmac('sha256', secret).update(body).digest());
 }
-export function razorpayProvider(key: string, secret: string): Provider {
+export function razorpayProvider(key: string, secret: string, createClient = () => new Razorpay({ key_id: key, key_secret: secret })): Provider {
   // Lazy construction keeps unconfigured environments usable for free content.
   let client: Razorpay | undefined;
   return { async request(path, body) {
     let timer: ReturnType<typeof setTimeout> | undefined;
     try {
-      client ??= new Razorpay({ key_id: key, key_secret: secret });
+      client ??= createClient();
       let request: Promise<unknown>;
       if (path === 'orders' && body) request = client.orders.create(body as Parameters<typeof client.orders.create>[0]);
       else if (path.startsWith('orders?receipt=')) {
@@ -55,7 +55,7 @@ export function razorpayProvider(key: string, secret: string): Provider {
         timer = setTimeout(() => reject(new Error('Provider timeout')), 12000);
       })]);
     } catch (error: any) {
-      if (error?.statusCode === 401) throw new PaymentError(401, 'Payment provider authentication failed. Contact support.');
+      if (error?.statusCode === 401) throw new PaymentError(502, 'Payments are temporarily unavailable. Please contact support or try again later.', 'PAYMENT_PROVIDER_AUTH_FAILED');
       throw new PaymentError(500, 'Payment provider unavailable. Please retry confirmation shortly.');
     } finally { if (timer) clearTimeout(timer); }
   } };
