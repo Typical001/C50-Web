@@ -52,6 +52,10 @@ Run in this app directory after installing dependencies with `npm ci`.
 
 ## Configuration
 
-Server: `APP_URL`, `PORT`, `NODE_ENV`, `CORS_ALLOWED_ORIGINS`, `SUPABASE_URL`, `SUPABASE_PUBLISHABLE_KEY`, `SUPABASE_SECRET_KEY`, `SESSION_SECRET`, `RAZORPAY_KEY_ID`, `RAZORPAY_KEY_SECRET`, `RAZORPAY_WEBHOOK_SECRET`. Browser: `VITE_SUPABASE_URL`, `VITE_SUPABASE_PUBLISHABLE_KEY`.
+Server: `APP_URL`, `PORT`, `NODE_ENV`, `CORS_ALLOWED_ORIGINS`, `SUPABASE_URL`, `SUPABASE_PUBLISHABLE_KEY`, `SUPABASE_SECRET_KEY`, `RAZORPAY_KEY_ID`, `RAZORPAY_KEY_SECRET`, `RAZORPAY_WEBHOOK_SECRET`. Browser: `VITE_SUPABASE_URL`, `VITE_SUPABASE_PUBLISHABLE_KEY`.
 
 Keep real values in ignored local environment files or the deployment platform. All VITE_/EXPO_PUBLIC_ values are client-visible; no backend secrets belong there. Package installation is not evidence of a configured product feature. See [workflows](WORKFLOWS.md) for release commands and checks.
+
+## Session checks — 2026-11-13
+
+`npm run test:sessions` runs backend/transport and mocked Android lifecycle regressions. `SESSION_SECRET` is no longer consumed by the backend; do not provision it for new deployments. No dependency changes were needed.

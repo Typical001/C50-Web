@@ -1,3 +1,4 @@
+import { setSessionContext } from '../src/lib/sessionTransport';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { confirmedAccess, createPurchase, verifyPurchase } from '../src/lib/paymentClient';
@@ -12,9 +13,9 @@ test('UI access requires successful server status, access, and exact batch/payme
 });
 test('browser order and verification requests contain only approved fields', async () => {
   const original = globalThis.fetch;
-  const descriptor = Object.getOwnPropertyDescriptor(globalThis, 'localStorage');
+
   const requests: any[] = [];
-  Object.defineProperty(globalThis, 'localStorage', { configurable: true, value: { getItem: () => 'fixture-token' } });
+  setSessionContext('fixture-token');
   globalThis.fetch = async (_url, options) => {
     requests.push(options); return new Response(JSON.stringify({ status: 'pending' }), { status: 200 });
   };
@@ -23,16 +24,16 @@ test('browser order and verification requests contain only approved fields', asy
     await verifyPurchase({ razorpay_order_id: 'order', razorpay_payment_id: 'payment', razorpay_signature: 'signature', amount: 1, user_id: 'forged' } as any);
     assert.deepEqual(JSON.parse(requests[0].body), { batchId: 'batch' });
     assert.deepEqual(Object.keys(JSON.parse(requests[1].body)).sort(), ['razorpay_order_id', 'razorpay_payment_id', 'razorpay_signature']);
-    assert.equal(requests[0].headers.Authorization, 'Bearer fixture-token');
+    assert.equal(requests[0].headers.get('Authorization'), 'Bearer fixture-token');
     globalThis.fetch = async () => new Response(JSON.stringify({ error: 'Payment not found.' }), { status: 404 });
     await assert.rejects(createPurchase('batch'), /Payment not found/);
     globalThis.fetch = async () => {
-      Object.defineProperty(globalThis, 'localStorage', { configurable: true, value: { getItem: () => 'different-account' } });
+      setSessionContext('different-account');
       return new Response(JSON.stringify({ status: 'success', hasAccess: true }), { status: 200 });
     };
     await assert.rejects(createPurchase('batch'), /Account changed/);
   } finally {
     globalThis.fetch = original;
-    if (descriptor) Object.defineProperty(globalThis, 'localStorage', descriptor); else delete (globalThis as any).localStorage;
+    setSessionContext(null);
   }
 });

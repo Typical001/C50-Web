@@ -13,7 +13,7 @@ The Vite student UI and Express API deploy as one Render service. The separate A
 
 ## Authentication and authorization
 
-Express accepts a Bearer token (or session cookie): custom encrypted/signed web sessions are verified and their user fetched through Auth Admin; Supabase tokens are verified through Auth. It loads the authoritative role from profiles rather than trusting client claims. Missing auth is rejected; unavailable identity/profile fails closed. Admin UI gating supplements, rather than replaces, RLS. Existing custom sessions are not automatically revoked by the password recovery change.
+As of 2026-11-13 local source, Web uses Supabase SDK sessions, matching Android/Admin. Express accepts only Supabase Bearer tokens, validates them through Auth getUser, requires confirmed email and loads the authoritative profiles role. Legacy custom tokens and cookie fallback are rejected; legacy login/register/verify-email endpoints return 410. GET /api/auth/me returns the verified profile. Authenticated responses use Cache-Control: no-store. Database policies and payment/access checks remain authoritative. This supersedes the earlier custom-session contract; deployment remains pending.
 
 The shared has_active_batch_access RPC requires active exact-user/batch enrollment. Paid access additionally requires a matching server-verified successful payment, amount and provider evidence. Administrators have explicit content-management access. Free enrollment uses the authenticated backend endpoint; clients cannot create paid entitlements. Course structure and progress/history writes are protected; public search exposes batch metadata only.
 
@@ -82,3 +82,7 @@ No Google OAuth integration, Drive API access, permission automation, file proxy
 ## Confirmation callback distinction — 2026-11-13
 
 Email confirmation and password recovery now have separate UI handling; untyped Site URL errors are neutral, and only recovery context opens the reset form. POST /api/auth/resend-confirmation is rate-limited, validates email and invokes Supabase signup resend with the validated APP_URL root redirect. It never resets a password or bypasses confirmation. Local checks passed as recorded in CURRENT-STATE; deployment and a real fresh-email/login round trip remain pending. Supabase Site URL should be the website root and Redirect URLs must allow that root and /reset-password; retain default confirmation verification links rather than linking straight to the application. Configuration/template values were not changed or live-verified in this task. Use the newest confirmation email; use Forgot Password only for recovery.
+
+## Session privacy — 2026-11-13
+
+SessionTransport holds the active token in memory and invalidates/aborts requests on account changes. Web startup and foreground checks use /api/auth/me; browser auth state alone does not expose private content. Recovery callback sessions remain isolated from normal session rendering. Local logout locks prevent cached identity from reopening the UI. Successful local-scope sign-out revokes the associated refresh session; already issued JWTs can remain valid until expiry. This is not immediate global token revocation. Shared contracts: [Web architecture](../../C50-Project/main-brain/ARCHITECTURE.md).

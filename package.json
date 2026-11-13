@@ -11,7 +11,8 @@
     "clean": "rm -rf dist server.js",
     "lint": "tsc --noEmit",
     "test:payments": "tsx --test server/payments.test.ts server/payment-client.test.ts",
-    "test:recovery": "tsx --test server/recovery.test.ts"
+    "test:recovery": "tsx --test server/recovery.test.ts",
+    "test:sessions": "tsx --test server/session.test.ts server/mobile-session.test.ts"
   },
   "dependencies": {
     "@google/genai": "^2.4.0",

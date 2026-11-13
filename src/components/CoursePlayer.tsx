@@ -1,3 +1,4 @@
+import { currentAccessToken, sessionFetch } from '../lib/sessionTransport';
 import { notesLink } from '../lib/notesLink';
 import React, { useState, useEffect } from 'react';
 import { 
@@ -77,8 +78,8 @@ export default function CoursePlayer({ batchId, batchTitle, userId, onBack }: Co
         setLoading(true);
         setAccessError('');
         setStructure([]);
-        const res = await fetch(`/api/batches/${batchId}/structure`, {
-          headers: { Authorization: `Bearer ${localStorage.getItem('aura_session_token') || ''}` }
+        const res = await sessionFetch(`/api/batches/${batchId}/structure`, {
+          headers: { Authorization: `Bearer ${currentAccessToken() || ''}` }
         });
         const structData = await res.json();
         if (!res.ok) throw new Error(structData.error || 'Unable to verify course access.');
@@ -89,8 +90,8 @@ export default function CoursePlayer({ batchId, batchTitle, userId, onBack }: Co
 
         // Load user progress
         try {
-          const token = localStorage.getItem('aura_session_token');
-          const progRes = await fetch(`/api/progress/${userId}`, {
+          const token = currentAccessToken();
+          const progRes = await sessionFetch(`/api/progress/${userId}`, {
             headers: { 'Authorization': `Bearer ${token}` }
           });
           const progressData = await progRes.json();
@@ -121,8 +122,8 @@ export default function CoursePlayer({ batchId, batchTitle, userId, onBack }: Co
     setProgressState(prev => ({ ...prev, [lecId]: nextVal }));
 
     try {
-      const token = localStorage.getItem('aura_session_token');
-      await fetch('/api/progress', {
+      const token = currentAccessToken();
+      await sessionFetch('/api/progress', {
         method: 'POST',
         headers: { 
           'Content-Type': 'application/json',
@@ -142,8 +143,8 @@ export default function CoursePlayer({ batchId, batchTitle, userId, onBack }: Co
 
   const updateWatchHistory = async (lecId: string, timeSec: number) => {
     try {
-      const token = localStorage.getItem('aura_session_token');
-      await fetch('/api/watch-history', {
+      const token = currentAccessToken();
+      await sessionFetch('/api/watch-history', {
         method: 'POST',
         headers: { 
           'Content-Type': 'application/json',

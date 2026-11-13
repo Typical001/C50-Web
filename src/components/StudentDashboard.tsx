@@ -1,3 +1,4 @@
+import { currentAccessToken, sessionFetch } from '../lib/sessionTransport';
 import React, { useState, useEffect } from 'react';
 import { 
   CheckCircle, Play, Flame, Award, Clock, BookOpen, 
@@ -17,24 +18,28 @@ export default function StudentDashboard({ userId, userName, onViewLectures, bat
   const [stats, setStats] = useState<DashboardStats | null>(null);
   const [announcements, setAnnouncements] = useState<Announcement[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
 
   const fetchStatsAndAnnouncements = async () => {
     try {
-      setLoading(true);
-      const token = localStorage.getItem('aura_session_token');
+      setLoading(true); setError('');
+      const token = currentAccessToken();
       // Stats API
-      const statsRes = await fetch(`/api/progress/${userId}/stats`, {
+      const statsRes = await sessionFetch(`/api/progress/${userId}/stats`, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
       const statsData = await statsRes.json();
+      if (!statsRes.ok || !statsData || !Number.isFinite(statsData.totalLectures) || !Array.isArray(statsData.watchHistory)) throw new Error('Unable to load dashboard statistics. Please retry.');
       setStats(statsData);
 
       // Announcements API
-      const annRes = await fetch('/api/announcements');
+      const annRes = await sessionFetch('/api/announcements');
       const annData = await annRes.json();
+      if (!annRes.ok || !Array.isArray(annData)) throw new Error('Unable to load announcements. Please retry.');
       setAnnouncements(annData);
     } catch (err) {
-      console.error('Error loading student dashboard details:', err);
+      setStats(null); setAnnouncements([]);
+      setError(err instanceof Error ? err.message : 'Unable to load dashboard. Please retry.');
     } finally {
       setLoading(false);
     }
@@ -61,6 +66,7 @@ export default function StudentDashboard({ userId, userName, onViewLectures, bat
     );
   }
 
+  if (error) return <div role="alert" className="max-w-7xl mx-auto p-8"><p>{error}</p><button onClick={fetchStatsAndAnnouncements} className="mt-4 underline">Retry dashboard</button></div>;
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10 space-y-10">
       

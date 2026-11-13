@@ -1,14 +1,15 @@
+import { currentAccessToken, sessionFetch } from './sessionTransport';
 export type PaymentStatus = { paymentId: string; batchId: string; status: 'pending' | 'success' | 'failed'; hasAccess: boolean };
 export async function paymentRequest(path: string, body?: unknown) {
-  const token = localStorage.getItem('aura_session_token');
+  const token = currentAccessToken();
   if (!token) throw new Error('Please sign in again.');
-  const response = await fetch(path, {
+  const response = await sessionFetch(path, {
     method: body === undefined ? 'GET' : 'POST',
     headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
     ...(body === undefined ? {} : { body: JSON.stringify(body) }), signal: AbortSignal.timeout(20000)
   });
   const data = await response.json();
-  if (token !== localStorage.getItem('aura_session_token')) throw new Error('Account changed. Please sign in again.');
+  if (token !== currentAccessToken()) throw new Error('Account changed. Please sign in again.');
   if (!response.ok) throw new Error(data.error || 'Unable to confirm payment. Please try again.');
   return data;
 }

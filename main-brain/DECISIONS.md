@@ -19,3 +19,7 @@ These record implemented choices, not new approvals. Product policy choices in h
 ## Test Series decisions — 2026-11-12
 
 User selected catalog synchronization only and removal that preserves existing access. Reuse one Supabase batch row per series rather than creating competing catalogs. Keep exam category independent from the reserved Test Series tag; recognize historical category/custom-tag markers. Use a separate listed-for-sale flag, not `is_active`, because the latter gates learning access. New series start as drafts until the Admin explicitly publishes them. All new enrollments go through the existing authenticated server API; browser/mobile clients cannot insert enrollment rows directly. Existing course purchase restrictions in Play remain unchanged.
+
+## 2026-11-13 — One session authority
+
+Use Supabase SDK sessions on all clients and authoritative server/profile verification. Retire custom Web tokens rather than maintain two revocation paths. Accepted consequence: existing website users sign in again after coordinated deployment. Persist a local logout lock until successful explicit authentication so network failure cannot restore old identity. This does not provide immediate global JWT revocation.

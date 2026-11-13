@@ -15,7 +15,7 @@ Last consolidated: 2026-11-09. Local source/configuration reviewed; historical t
 
 ## Release constraints
 
-- Rotate exposed admin password/revoke sessions and confirm legacy elevated-key retirement; no completion evidence. Existing custom Express sessions after password change need separate revocation work.
+- Rotate exposed admin password/revoke sessions and confirm legacy elevated-key retirement; no completion evidence. Local source now rejects custom Express sessions; deployment of that retirement remains outstanding. Supabase session/credential remediation is still separate.
 - A public PDF/video URL is not protected by course-table RLS. Do not describe paid media delivery as private.
 - Deletion is a manual request channel, not an implemented deletion API/job. Terms wording does not establish operational/legal compliance.
 - Payment Enabled appeared checked for two batches in the September 6 inspection despite disabled migration defaults. Do not assume either setting today.
@@ -78,3 +78,11 @@ Fixed the parser that classified every Supabase callback error as password recov
 Added rate-limited POST /api/auth/resend-confirmation accepting only an email for the signup resend operation, with generic success and sanitized failure feedback. Login exposes Resend confirmation email. Signup and resend explicitly request the validated APP_URL root as email redirect; password recovery still targets /reset-password. No password, email confirmation status or user role is changed by the UI callback itself.
 
 Verified: Web TypeScript, 8 recovery tests and production build passed. Headless Edge local fixtures verified generic/expired email errors and signup callbacks do not show Reset your password, callback URL scrubbing, resend email validation/request payload, and genuine recovery error UI. No email was sent, no real confirmation/reset token consumed, no database changes and no deployment performed. Existing bundle-size warning remains. Actual newest-email confirmation and subsequent login remain pending after deployment.
+
+## Session privacy — 2026-11-13
+
+**Implemented locally:** Web now uses verified Supabase sessions instead of custom tokens. Private UI is remounted on session transitions; generation guards reject delayed API responses after logout/account switch. Dashboard failures show Retry rather than fabricated zero metrics. Reviewer quick-login is removed. All clients retain a persisted local logout lock when network sign-out or a subsequent login fails.
+
+**Verified:** Web TypeScript and production build passed (existing large-bundle advisory); 5 session, 19 payment and 8 recovery tests passed. Local Edge fixtures passed login/reload, cross-tab logout, delayed-response logout, account switch, offline logout/reload and dashboard failure handling.
+
+**Release:** No deployment, Supabase configuration/schema/data change, or new APK was performed. Deploy Web/backend together, deploy Admin and rebuild Android separately. Existing custom-token website sessions must sign in again. Physical-device and real-account production checks remain pending.

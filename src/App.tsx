@@ -1,3 +1,5 @@
+import { useWebsiteSession, completeWebsiteLogin, prepareWebsiteLogin, signOutWebsite } from './lib/webSession';
+import { currentAccessToken, sessionFetch, sessionGeneration } from './lib/sessionTransport';
 import TestSeriesCatalog from './components/TestSeriesCatalog';
 import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
@@ -15,16 +17,21 @@ import CoursePlayer from './components/CoursePlayer';
 import StudentDashboard from './components/StudentDashboard';
 import PaymentModal from './components/PaymentModal';
 import { paymentRequest } from './lib/paymentClient';
-import { recoveryRequest, confirmationNotice } from './lib/supabaseClient';
+import { recoveryRequest, confirmationNotice, supabase } from './lib/supabaseClient';
 import PasswordRecovery from './components/PasswordRecovery';
 
 type AppView = 'test-series' | 'home' | 'free-batches' | 'paid-batches' | 'student-dashboard' | 'profile' | 'player';
 
 export default function App() {
+  const session = useWebsiteSession();
+  if (session.checking) return <div role="status" className="min-h-screen flex items-center justify-center">Verifying session…</div>;
+  return <Website key={session.revision} initialUser={session.user} sessionError={session.error} />;
+}
+function Website({ initialUser, sessionError }: { key?: number; initialUser: User | null; sessionError: string }) {
   // Navigation & View States
   const [seriesFilter, setSeriesFilter] = useState<'all' | 'free' | 'paid'>('all');
   const catalogRequest = useRef(0);
-  const [currentView, setCurrentView] = useState<AppView>('home');
+  const [currentView, setCurrentView] = useState<AppView>(initialUser ? 'student-dashboard' : 'home');
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [activeBatchId, setActiveBatchId] = useState<string | null>(null);
 
@@ -34,13 +41,13 @@ export default function App() {
   const [showSearchDropdown, setShowSearchDropdown] = useState(false);
 
   // Authentication States
-  const [user, setUser] = useState<User | null>(null);
-  const [authMode, setAuthMode] = useState<'login' | 'register' | null>(null);
+  const [user, setUser] = useState<User | null>(initialUser);
+  const [authMode, setAuthMode] = useState<'login' | 'register' | null>(sessionError ? 'login' : null);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [regName, setRegName] = useState('');
   const [regRole, setRegRole] = useState<'student' | 'admin'>('student');
-  const [authError, setAuthError] = useState('');
+  const [authError, setAuthError] = useState(sessionError);
   const [emailNotice, setEmailNotice] = useState(confirmationNotice || '');
   const [resendingConfirmation, setResendingConfirmation] = useState(false);
 
@@ -127,20 +134,9 @@ export default function App() {
   // Initial Sync & Boot
   // -----------------------------------------------------------------
   useEffect(() => {
-    // Check local storage for persistent session
-    const storedUser = localStorage.getItem('aura_session_user');
-    if (storedUser) {
-      try {
-        const parsed = JSON.parse(storedUser);
-        setUser(parsed);
-        setProfileName(parsed.name);
-        setProfileAvatar(parsed.avatarUrl || '');
-        loadEnrollments(parsed.id);
-      } catch (err) {
-        console.error('Error restoring session:', err);
-      }
+    if (initialUser) {
+      setProfileName(initialUser.name); setProfileAvatar(initialUser.avatarUrl || '');
     }
-
     // The client captures recovery parameters before Supabase can consume them.
     if (recoveryRequest.kind !== 'none') {
       setAuthMode('login');
@@ -175,16 +171,16 @@ export default function App() {
 
   const loadBatches = async () => {
     const ticket = ++catalogRequest.current;
-    const token = localStorage.getItem('aura_session_token');
+    const token = currentAccessToken();
     try {
       setLoadingBatches(true);
       setBatchesError('');
-      const res = await fetch(token ? '/api/my-batches' : '/api/batches', { headers: token ? { Authorization: `Bearer ${token}` } : {}, signal: AbortSignal.timeout(20000) });
+      const res = await sessionFetch(token ? '/api/my-batches' : '/api/batches', { headers: token ? { Authorization: `Bearer ${token}` } : {}, signal: AbortSignal.timeout(20000) });
       const data = await res.json();
       if (!res.ok || !Array.isArray(data)) {
         throw new Error('Could not load courses. Please try again.');
       }
-      if (ticket === catalogRequest.current && token === localStorage.getItem('aura_session_token')) setBatches(data);
+      if (ticket === catalogRequest.current && token === currentAccessToken()) setBatches(data);
     } catch (err) {
       console.error('Failed to fetch batches:', err);
       if (ticket === catalogRequest.current) setBatchesError('Could not load courses. Please try again.');
@@ -204,7 +200,7 @@ export default function App() {
 
   const loadHomepage = async () => {
     try {
-      const res = await fetch('/api/homepage');
+      const res = await sessionFetch('/api/homepage');
       const data = await res.json();
       if (data) {
         setHeroTitle(data.hero_title || '');
@@ -230,12 +226,12 @@ export default function App() {
 
   const loadEnrollments = async (userId: string) => {
     try {
-      const storedToken = localStorage.getItem('aura_session_token');
+      const storedToken = currentAccessToken();
       if (!storedToken) {
         handleLogout();
         return;
       }
-      const res = await fetch(`/api/enrollments/${userId}`, {
+      const res = await sessionFetch(`/api/enrollments/${userId}`, {
         headers: { 'Authorization': `Bearer ${storedToken}` }
       });
       if (res.status === 401) {
@@ -255,8 +251,8 @@ export default function App() {
 
   const loadPaymentsHistory = async (userId: string) => {
     try {
-      const storedToken = localStorage.getItem('aura_session_token');
-      const res = await fetch(`/api/payments/history/${userId}`, {
+      const storedToken = currentAccessToken();
+      const res = await sessionFetch(`/api/payments/history/${userId}`, {
         headers: { 'Authorization': `Bearer ${storedToken}` }
       });
       const data = await res.json();
@@ -279,7 +275,7 @@ export default function App() {
     }
 
     try {
-      const res = await fetch(`/api/search?q=${encodeURIComponent(val)}`);
+      const res = await sessionFetch(`/api/search?q=${encodeURIComponent(val)}`);
       const data = await res.json();
       setSearchResults(data);
       setShowSearchDropdown(true);
@@ -291,56 +287,30 @@ export default function App() {
   // -----------------------------------------------------------------
   // Authentication Actions
   // -----------------------------------------------------------------
+  const [authBusy, setAuthBusy] = useState(false);
+  const authSubmitting = useRef(false);
   const handleAuthSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setAuthError('');
-
+    if (authSubmitting.current) return;
+    authSubmitting.current = true; setAuthBusy(true); setAuthError('');
     try {
+      await prepareWebsiteLogin();
       if (authMode === 'login') {
-        const res = await fetch('/api/auth/login', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ email, password })
-        });
-        const data = await res.json();
-
-        if (res.ok) {
-          setUser(data.user);
-          setProfileName(data.user.name);
-          setProfileAvatar(data.user.avatarUrl || '');
-          localStorage.setItem('aura_session_user', JSON.stringify(data.user));
-          localStorage.setItem('aura_session_token', data.token);
-          setAuthMode(null);
-          resetAuthForm();
-          setCurrentView('student-dashboard');
-        } else {
-          setAuthError(data.error || 'Authentication failed.');
-        }
+        const { data, error } = await supabase.auth.signInWithPassword({ email: email.trim(), password });
+        if (error) throw error;
+        await completeWebsiteLogin(data.session);
       } else {
-        const res = await fetch('/api/auth/register', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ email, password, name: regName, role: regRole })
-        });
-        const data = await res.json();
-
-        if (res.ok) {
-          setUser(data.user);
-          setProfileName(data.user.name);
-          setProfileAvatar(data.user.avatarUrl || '');
-          localStorage.setItem('aura_session_user', JSON.stringify(data.user));
-          localStorage.setItem('aura_session_token', data.token);
-          setAuthMode(null);
-          resetAuthForm();
-          setCurrentView('student-dashboard');
-        } else {
-          setAuthError(data.error || 'Registration failed.');
+        const { data, error } = await supabase.auth.signUp({ email: email.trim(), password,
+          options: { emailRedirectTo: window.location.origin + '/', data: { name: regName.trim() } } });
+        if (error) throw error;
+        if (data.session) await completeWebsiteLogin(data.session);
+        if (!data.session) {
+          setAuthMode('login');
+          setEmailNotice('Check your inbox and confirm your email, then sign in.');
         }
       }
-    } catch (err) {
-      console.error('Auth request failed:', err);
-      setAuthError('Connection error. Please try again.');
-    }
+    } catch (error) { setAuthError(error instanceof Error ? error.message : 'Unable to sign in. Please try again.'); }
+    finally { setPassword(''); authSubmitting.current = false; setAuthBusy(false); }
   };
 
   const resendConfirmation = async () => {
@@ -350,7 +320,7 @@ export default function App() {
     }
     setResendingConfirmation(true);
     try {
-      const response = await fetch('/api/auth/resend-confirmation', {
+      const response = await sessionFetch('/api/auth/resend-confirmation', {
         method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email: email.trim() })
       });
       const result = await response.json();
@@ -360,13 +330,7 @@ export default function App() {
     finally { setResendingConfirmation(false); }
   };
 
-  const handleLogout = () => {
-    localStorage.removeItem('aura_session_user');
-    localStorage.removeItem('aura_session_token');
-    setUser(null);
-    setCurrentView('home');
-    resetAuthForm();
-  };
+  const handleLogout = () => { void signOutWebsite(); };
 
   const resetAuthForm = () => {
     setEmail('');
@@ -379,7 +343,9 @@ export default function App() {
     if (!user) throw new Error('Please sign in to start learning.');
     const access = await paymentRequest(`/api/batches/${batchId}/access`);
     if (access.batchId !== batchId || access.hasAccess !== true) throw new Error('This course requires an active enrollment and, for paid batches, verified payment.');
+    const owner = sessionGeneration();
     await loadEnrollments(user.id);
+    if (owner !== sessionGeneration()) return;
     setActiveBatchId(batchId); setCurrentView('player');
   }
   const viewLectures = (batchId: string) => { void openVerifiedBatch(batchId).catch(error => alert(error.message)); };
@@ -395,37 +361,9 @@ export default function App() {
 
   // Secure verification handler
   const handleVerifyEmail = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!user) return;
-    setVerificationError('');
-    setVerificationSuccess('');
-    setVerifying(true);
-
-    try {
-      const res = await fetch('/api/auth/verify-email', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: user.email, code: verificationCode })
-      });
-      const data = await res.json();
-      if (res.ok) {
-        const updatedUser = { ...user, isVerified: true };
-        setUser(updatedUser);
-        localStorage.setItem('aura_session_user', JSON.stringify(updatedUser));
-        setVerificationSuccess('Your email has been successfully verified! Happy learning.');
-        setVerificationCode('');
-      } else {
-        setVerificationError(data.error || 'Verification failed. Please check the code.');
-      }
-    } catch (err) {
-      console.error('Verify email fail:', err);
-      setVerificationError('Verification failed. Connection error.');
-    } finally {
-      setVerifying(false);
-    }
+    e.preventDefault(); setVerificationError('Confirm your email using the newest email link, then sign in again.');
   };
 
-  // Forgot password triggers
   const handleForgotPassword = async (e: React.FormEvent) => {
     e.preventDefault();
     if (forgotBusy) return;
@@ -434,7 +372,7 @@ export default function App() {
     setForgotMsg('');
 
     try {
-      const res = await fetch('/api/auth/forgot-password', {
+      const res = await sessionFetch('/api/auth/forgot-password', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email: forgotEmail })
@@ -454,13 +392,6 @@ export default function App() {
     }
   };
 
-  // Developer Quick reviewer access bypass
-  const handleQuickBypass = () => {
-    setEmail('student@carrier50.com');
-    setPassword('student123');
-    setAuthMode('login');
-  };
-
   const handleEnrollFreeBatch = async (batchId: string) => {
     if (!user) {
       setAuthMode('login');
@@ -468,8 +399,8 @@ export default function App() {
     }
 
     try {
-      const token = localStorage.getItem('aura_session_token');
-      const res = await fetch('/api/enrollments', {
+      const token = currentAccessToken();
+      const res = await sessionFetch('/api/enrollments', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -508,7 +439,7 @@ export default function App() {
     setProfileMsg('');
 
     try {
-      const res = await fetch('/api/auth/update-profile', {
+      const res = await sessionFetch('/api/auth/update-profile', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -520,7 +451,6 @@ export default function App() {
       const data = await res.json();
       if (res.ok) {
         setUser(data.user);
-        localStorage.setItem('aura_session_user', JSON.stringify(data.user));
         setProfileMsg('Your profile modifications were saved successfully.');
       } else {
         setProfileMsg(data.error || 'Profile update failed.');
@@ -1604,24 +1534,6 @@ onViewLectures={viewLectures}
                     <p className="text-xs text-gray-400">
                       Distraction-free learning awaits you
                     </p>
-                  </div>
-
-                  {/* Student reviewer quick access */}
-                  <div className={`p-3 border rounded-2xl mb-6 text-[10px] space-y-1.5 text-gray-600 bg-[#6D5DF6]/5 border-[#6D5DF6]/10`}>
-                    <p className="font-bold text-gray-500 uppercase tracking-wider text-[9px]">
-                      Reviewer Quick Access
-                    </p>
-                    <div className="flex gap-2">
-
-                        <button
-                          id="bypass-login-student-btn"
-                          onClick={() => handleQuickBypass()}
-                          className="w-full bg-white hover:bg-gray-100 text-[#6D5DF6] py-1.5 border rounded-lg font-bold transition-all cursor-pointer text-[10px]"
-                        >
-                          Login as Student (student@carrier50.com)
-                        </button>
-
-                    </div>
                   </div>
 
                   {emailNotice && <p role="status" className="mb-4 rounded-xl bg-indigo-50 p-3 text-sm text-indigo-800">{emailNotice}</p>}

@@ -34,3 +34,7 @@ Archives are immutable history except credential redaction and necessary correct
 ## Latest feature — 2026-11-12
 
 Test Series catalog synchronization is implemented and the Supabase changes are applied. See [current evidence](CURRENT-STATE.md), [shared/client architecture](ARCHITECTURE.md) and [workflow](WORKFLOWS.md). Hosted application deployment and updated Android APK/device verification remain outstanding.
+
+## Latest session update — 2026-11-13
+
+Session validation and logout privacy changes are implemented locally. See [current evidence](CURRENT-STATE.md) and [remaining release checks](ROADMAP.md); no deployment or new APK is implied.

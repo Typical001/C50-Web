@@ -1,3 +1,4 @@
+import { createRequireAuth, type AuthenticatedRequest } from './server/auth';
 import { isTestSeries } from './src/lib/testSeries';
 import express from 'express';
 import path from 'path';
@@ -45,7 +46,6 @@ function requiredServerEnv(name: string): string {
 const APP_URL = requiredServerEnv('APP_URL').replace(/\/$/, '');
 const SUPABASE_URL = requiredServerEnv('SUPABASE_URL');
 const SUPABASE_PUBLISHABLE_KEY = requiredServerEnv('SUPABASE_PUBLISHABLE_KEY');
-const SESSION_SECRET = requiredServerEnv('SESSION_SECRET');
 const SUPABASE_SECRET_KEY = requiredServerEnv('SUPABASE_SECRET_KEY');
 const allowedOrigins = new Set(
   [APP_URL, ...(process.env.CORS_ALLOWED_ORIGINS || '').split(',')]
@@ -72,9 +72,10 @@ app.use((req: Request, res: Response, next: NextFunction) => {
   next();
 });
 
-const supabase = createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, {
-  auth: { persistSession: false, autoRefreshToken: false }
+const createAuthClient = () => createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, {
+  auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false }
 });
+const supabase = createAuthClient();
 const supabaseAdmin = createClient(SUPABASE_URL, SUPABASE_SECRET_KEY, {
   auth: { persistSession: false, autoRefreshToken: false }
 });
@@ -107,90 +108,10 @@ function verifyPassword(password: string, storedHash: string): boolean {
   return hash === checkHash;
 }
 
-function generateSessionToken(payload: { id: string; role: string; email: string }): string {
-  const expiresAt = Date.now() + 2 * 60 * 60 * 1000; // 2 hours expiration
-  const data = JSON.stringify({ ...payload, expiresAt });
-  
-  const cipher = crypto.createCipheriv('aes-256-cbc', crypto.scryptSync(SESSION_SECRET, 'salt-session', 32), Buffer.alloc(16, 0));
-  let encrypted = cipher.update(data, 'utf8', 'hex');
-  encrypted += cipher.final('hex');
-  
-  const hmac = crypto.createHmac('sha256', SESSION_SECRET).update(encrypted).digest('hex');
-  return `${encrypted}.${hmac}`;
-}
-
-function verifySessionToken(token: string): { id: string; role: string; email: string } | null {
-  if (!token) return null;
-  const parts = token.split('.');
-  if (parts.length !== 2) return null;
-  const [encrypted, hmac] = parts;
-  
-  const expectedHmac = crypto.createHmac('sha256', SESSION_SECRET).update(encrypted).digest('hex');
-  if (!/^[a-f0-9]{64}$/.test(hmac) || !crypto.timingSafeEqual(Buffer.from(hmac, 'hex'), Buffer.from(expectedHmac, 'hex'))) return null;
-  
-  try {
-    const decipher = crypto.createDecipheriv('aes-256-cbc', crypto.scryptSync(SESSION_SECRET, 'salt-session', 32), Buffer.alloc(16, 0));
-    let decrypted = decipher.update(encrypted, 'hex', 'utf8');
-    decrypted += decipher.final('utf8');
-    
-    const payload = JSON.parse(decrypted);
-    if (!Number.isFinite(payload.expiresAt) || typeof payload.id !== 'string' || Date.now() > payload.expiresAt) {
-      logSecurityEvent('WARN', 'Session expired', { userId: payload.id, email: payload.email });
-      return null;
-    }
-    return payload;
-  } catch (err) {
-    logSecurityEvent('ERROR', 'Session token decryption failure', { error: String(err) });
-    return null;
-  }
-}
-
 // -------------------------------------------------------------
 // Authentication Express Middlewares
 // -------------------------------------------------------------
-export interface AuthenticatedRequest extends Request {
-  user?: { id: string; role: string; email: string };
-}
-
-const requireAuth = async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
-  let token = '';
-  const authHeader = req.headers.authorization;
-  if (authHeader && authHeader.startsWith('Bearer ')) {
-    token = authHeader.substring(7);
-  } else if (req.headers.cookie) {
-    const match = req.headers.cookie.match(/session=([^;]+)/);
-    if (match) {
-      token = match[1];
-    }
-  }
-  
-  if (!token) {
-    logSecurityEvent('WARN', 'Unauthorized route access attempted', { path: req.originalUrl, ip: req.ip });
-    return res.status(401).json({ error: 'Authentication required. Please log in.' });
-  }
-  
-  try {
-    let identity: { id: string; email?: string } | null = null;
-    if (token.split('.').length === 2) {
-      const decoded = verifySessionToken(token);
-      if (decoded) {
-        const { data, error } = await supabaseAdmin.auth.admin.getUserById(decoded.id);
-        if (!error) identity = data.user;
-      }
-    } else {
-      // Supabase verifies the JWT; decoding a client token is not authentication.
-      const { data, error } = await supabaseAdmin.auth.getUser(token);
-      if (!error) identity = data.user;
-    }
-    if (!identity) return res.status(401).json({ error: 'Session expired or invalid. Please log in again.' });
-    const { data: profile, error } = await supabaseAdmin.from('profiles').select('role').eq('id', identity.id).single();
-    if (error || !profile) return res.status(403).json({ error: 'Account profile unavailable.' });
-    req.user = { id: identity.id, email: identity.email || '', role: profile.role };
-    next();
-  } catch {
-    res.status(503).json({ error: 'Authentication service unavailable.' });
-  }
-};
+const requireAuth = createRequireAuth(supabaseAdmin);
 
 async function hasActiveBatchAccess(userId: string, batchId: string): Promise<boolean> {
   const { data, error } = await supabaseAdmin.rpc('has_active_batch_access', { p_user_id: userId, p_batch_id: batchId });
@@ -705,141 +626,17 @@ const writeDb = (data: DatabaseSchema) => {
 // -------------------------------------------------------------
 // Authentication Endpoints
 // -------------------------------------------------------------
-app.post('/api/auth/login', rateLimitAuth, async (req, res) => {
-  const { email, password } = req.body;
-  const ip = req.ip || (req.headers['x-forwarded-for'] as string) || 'unknown';
-
-  if (!email || !password) {
-    return res.status(400).json({ error: 'Email and password are required.' });
-  }
-
-  try {
-    const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
-      email: email.trim(),
-      password,
-    });
-
-    if (authError) {
-      logSecurityEvent('WARN', 'Failed login attempt via Supabase', { email, ip, error: authError.message });
-      return res.status(401).json({ error: authError.message });
-    }
-
-    // Get user details from profiles
-    const { data: profile, error: profileError } = await supabase
-      .from('profiles')
-      .select('*')
-      .eq('id', authData.user.id)
-      .single();
-
-    if (profileError || !profile) {
-      const fallbackUser = {
-        id: authData.user.id,
-        email: authData.user.email,
-        name: authData.user.user_metadata?.name || 'Student',
-        role: authData.user.user_metadata?.role || 'student',
-        createdAt: authData.user.created_at,
-        isVerified: true
-      };
-      logSecurityEvent('INFO', 'Login successful (fallback profile)', { userId: authData.user.id, email, ip });
-      const token = generateSessionToken({
-        id: fallbackUser.id,
-        role: fallbackUser.role,
-        email: fallbackUser.email || ''
-      });
-      return res.json({ user: fallbackUser, token, message: 'Login successful' });
-    }
-
-    const safeUser = {
-      id: profile.id,
-      email: email.trim(),
-      name: profile.name || profile.full_name || 'Student',
-      role: profile.role || 'student',
-      avatarUrl: profile.avatar_url || '',
-      createdAt: profile.created_at,
-      isVerified: true
-    };
-
-    logSecurityEvent('INFO', 'Successful user login', { userId: profile.id, email: safeUser.email, role: safeUser.role, ip });
-    const token = generateSessionToken({
-      id: safeUser.id,
-      role: safeUser.role,
-      email: safeUser.email
-    });
-    res.json({ user: safeUser, token, message: 'Login successful' });
-  } catch (err: any) {
-    logSecurityEvent('ERROR', 'Exception in login endpoint', { error: err.message, ip });
-    res.status(500).json({ error: err.message });
-  }
+// Auth credentials/sessions are owned by the Supabase SDK in every client.
+app.post(['/api/auth/login', '/api/auth/register', '/api/auth/verify-email'], (_req, res) => {
+  res.setHeader('Cache-Control', 'no-store');
+  res.status(410).json({ error: 'Reload the updated application and use Supabase sign-in or email confirmation.' });
 });
-
-app.post('/api/auth/register', async (req, res) => {
-  const { email, password, name, role } = req.body;
-  const ip = req.ip || (req.headers['x-forwarded-for'] as string) || 'unknown';
-
-  if (!email || !password || !name) {
-    return res.status(400).json({ error: 'All fields are required.' });
-  }
-
-  try {
-    const { data: authData, error: authError } = await supabase.auth.signUp({
-      email: email.trim(),
-      password,
-      options: {
-        emailRedirectTo: recoveryRedirect(APP_URL, process.env.NODE_ENV === 'production').replace('/reset-password', '/'),
-        data: {
-          name: name.trim(),
-          role: role || 'student'
-        }
-      }
-    });
-
-    if (authError) {
-      logSecurityEvent('WARN', 'Registration failed via Supabase', { email, ip, error: authError.message });
-      return res.status(400).json({ error: authError.message });
-    }
-
-    const user = authData.user;
-    if (!user) throw new Error('Failed to register user.');
-
-    // Check if the email is already registered (identities will be empty)
-    if (user.identities && user.identities.length === 0) {
-      logSecurityEvent('WARN', 'Registration attempted for existing email', { email, ip });
-      return res.status(400).json({ error: 'An account with this email address already exists. Please login instead.' });
-    }
-
-    // Fetch profile (created by trigger)
-    const { data: profile } = await supabase
-      .from('profiles')
-      .select('*')
-      .eq('id', user.id)
-      .single();
-
-    const safeUser = {
-      id: user.id,
-      email: user.email,
-      name: profile?.name || name.trim(),
-      role: profile?.role || role || 'student',
-      avatarUrl: profile?.avatar_url || '',
-      createdAt: user.created_at,
-      isVerified: true
-    };
-
-    logSecurityEvent('INFO', 'New user registered', { userId: user.id, email: user.email, role: safeUser.role, ip });
-    const token = generateSessionToken({
-      id: safeUser.id,
-      role: safeUser.role,
-      email: safeUser.email || ''
-    });
-    res.json({ user: safeUser, token, message: 'Registration successful' });
-  } catch (err: any) {
-    logSecurityEvent('ERROR', 'Exception in register endpoint', { error: err.message, ip });
-    res.status(500).json({ error: err.message });
-  }
-});
-
-// Secure endpoint to verify email with a 6-digit code (auto-success on Supabase)
-app.post('/api/auth/verify-email', (req, res) => {
-  res.json({ success: true, message: 'Your email address has been successfully verified.' });
+app.get('/api/auth/me', requireAuth, async (req: AuthenticatedRequest, res) => {
+  const { data: profile, error } = await supabaseAdmin.from('profiles')
+    .select('id,name,full_name,role,avatar_url,created_at').eq('id', req.user!.id).single();
+  if (error || !profile) return res.status(403).json({ error: 'Account profile unavailable. Contact support.' });
+  return res.json({ user: { id: profile.id, email: req.user!.email, name: profile.name || profile.full_name || 'Student',
+    role: profile.role, avatarUrl: profile.avatar_url || '', createdAt: profile.created_at, isVerified: true } });
 });
 
 // Resend only signup confirmation; never reset a password or mark an account verified.
@@ -850,7 +647,7 @@ app.post('/api/auth/resend-confirmation', rateLimitAuth, async (req, res) => {
   }
   try {
     const emailRedirectTo = recoveryRedirect(APP_URL, process.env.NODE_ENV === 'production').replace('/reset-password', '/');
-    const { error } = await supabase.auth.resend({ type: 'signup', email: email.trim(), options: { emailRedirectTo } });
+    const { error } = await createAuthClient().auth.resend({ type: 'signup', email: email.trim(), options: { emailRedirectTo } });
     if (error) return res.status(503).json({ error: 'Unable to send confirmation right now. Please wait a few minutes and retry.' });
     return res.json({ message: 'If this account needs confirmation, a confirmation email has been requested. Open the newest email, then sign in.' });
   } catch {
@@ -871,7 +668,7 @@ app.post('/api/auth/forgot-password', rateLimitAuth, async (req, res) => {
     return res.status(503).json({ error: 'Password recovery is temporarily unavailable. Please contact support.' });
   }
   try {
-    const { error } = await supabase.auth.resetPasswordForEmail(email.trim(), {
+    const { error } = await createAuthClient().auth.resetPasswordForEmail(email.trim(), {
       redirectTo
     });
     if (error) throw error;
