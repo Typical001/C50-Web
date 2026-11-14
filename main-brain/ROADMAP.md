@@ -57,4 +57,9 @@ Pending acceptance: coordinated release, real confirmed-account login/recovery, 
 
 ## Homepage app promotion — 2026-11-14
 
-Completed locally: app promotion editing/rendering, store validation, section hiding, load-failure save protection and hidden subscription form. Supabase migration and rollback-only authorization/save/reload checks passed. Local builds, 11 Web homepage/session tests, 21 payment tests and 1 Admin promotion test passed. Remaining: hosted release confirmation, actual store URLs when available, and authenticated Admin browser save/reload acceptance. No Android build required.
+Completed locally: app promotion editing/rendering, store validation, section hiding, load-failure save protection and hidden subscription form. Supabase migration and rollback-only authorization/save/reload checks passed. Local builds, 11 Web homepage/session tests, 21 payment tests and 1 Admin promotion test passed. Completed hosted: Web/Admin release and authenticated Admin unchanged-save/reload. Remaining: actual store URLs when available. No Android build required.
+
+
+### Hosted release evidence — 2026-11-14
+
+Verified live November 14, 2026: Web revision cc5e8d4991e7065d2c1338f38f5c562361f7057c (feature commit fd824c4e821ec4ccaabec9923f813a4d220953b5), Render deploy dep-dbsabanf3r2c73e6i3ng; Admin revision 27aee7ed18845a86845d776362ba4bb54ef1b608, Netlify deploy 6af8a55f2655a2dd680a6336. Supabase migration version 20261114071849 is applied and matches the local migration filename. Public /health and /api/homepage returned 200; homepage GET has no-store and safe Coming Soon defaults, and unauthenticated PUT returned 401. Hosted Admin displayed the new controls, saved unchanged settings successfully and reloaded them; the database content fingerprint excluding updated_at was unchanged. Public page inspection confirmed promotion content and no subscription form. Real store listing URLs remain unset; no sample links or content were published. No Android change/build required.
