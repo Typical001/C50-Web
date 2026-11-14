@@ -1,3 +1,5 @@
+import { homepagePatch } from './server/homepage-settings';
+import { defaultAppPromotion, readAppPromotion } from './src/lib/appPromotion';
 import { createRequireAuth, type AuthenticatedRequest } from './server/auth';
 import { isTestSeries } from './src/lib/testSeries';
 import express from 'express';
@@ -848,7 +850,9 @@ app.get('/api/homepage', async (req, res) => {
       .single();
 
     if (error && error.code !== 'PGRST116') throw error;
-    res.json(data || {
+    res.set('Cache-Control', 'no-store');
+    res.json(data ? { ...data, app_promotion: readAppPromotion(data.app_promotion) } : {
+      app_promotion: defaultAppPromotion(),
       hero_title: 'Design your future with C50 Academy',
       hero_subtitle: 'Access premium lectures, complete syllabus tracking, and study notes.',
       faqs: [],
@@ -866,32 +870,13 @@ app.get('/api/homepage', async (req, res) => {
 
 app.put('/api/homepage', requireAdmin, async (req, res) => {
   try {
-    const { 
-      hero_title, 
-      hero_subtitle, 
-      faqs, 
-      testimonials, 
-      faculties,
-      show_hero,
-      show_faq,
-      show_testimonials,
-      show_faculty
-    } = req.body;
-    const { data, error } = await supabase
+    let patch: Record<string, unknown>;
+    try { patch = homepagePatch(req.body); }
+    catch (error) { res.status(400).json({ error: (error as Error).message }); return; }
+    // The verified requireAdmin gate above authorizes this server-side write.
+    const { data, error } = await supabaseAdmin
       .from('homepage_settings')
-      .upsert({
-        id: 'mppsc_homepage',
-        hero_title,
-        hero_subtitle,
-        faqs: Array.isArray(faqs) ? faqs : [],
-        testimonials: Array.isArray(testimonials) ? testimonials : [],
-        faculties: Array.isArray(faculties) ? faculties : [],
-        show_hero: typeof show_hero === 'boolean' ? show_hero : true,
-        show_faq: typeof show_faq === 'boolean' ? show_faq : true,
-        show_testimonials: typeof show_testimonials === 'boolean' ? show_testimonials : true,
-        show_faculty: typeof show_faculty === 'boolean' ? show_faculty : true,
-        updated_at: new Date().toISOString()
-      })
+      .upsert({ ...patch, updated_at: new Date().toISOString() })
       .select()
       .single();
 

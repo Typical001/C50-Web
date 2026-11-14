@@ -86,3 +86,8 @@ Email confirmation and password recovery now have separate UI handling; untyped 
 ## Session privacy — 2026-11-13
 
 SessionTransport holds the active token in memory and invalidates/aborts requests on account changes. Web startup and foreground checks use /api/auth/me; browser auth state alone does not expose private content. Recovery callback sessions remain isolated from normal session rendering. Local logout locks prevent cached identity from reopening the UI. Successful local-scope sign-out revokes the associated refresh session; already issued JWTs can remain valid until expiry. This is not immediate global token revocation. Shared contracts: [Web architecture](../../C50-Project/main-brain/ARCHITECTURE.md).
+
+
+## Homepage app promotion — 2026-11-14
+
+homepage_settings.app_promotion is an additive non-null JSONB object containing visible, badge, heading, description, phone_name, phone_caption and google_play/app_store {status,url}. Web GET /api/homepage uses safe defaults and no-store; administrator-only PUT validates partial updates and preserves omitted fields. Standalone Admin saves through authenticated Supabase; existing RLS permits public reads and authoritative is_admin writes. A security-invoker CHECK helper enforces structure/text bounds/store URL restrictions. Client validators are identical copies for independent deployments. External available links use noopener noreferrer. No subscriber table or sending service exists.

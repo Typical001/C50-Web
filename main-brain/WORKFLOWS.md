@@ -54,3 +54,8 @@ Email confirmation and password recovery now have separate UI handling; untyped 
 ## Session privacy — 2026-11-13
 
 Release Web and backend together: the new frontend needs GET /api/auth/me, and the backend rejects legacy tokens/endpoints. Verify fresh confirmed-user login, reload, account switch, offline sign-out then failed login/reload, cross-tab logout (Web/Admin), browser Back and Android foreground/back behavior. Check profiles, purchases and CMS drafts from account A never appear for B or on login. Browser-managed password autofill is outside app cache control. No deployment, Supabase configuration/schema/data change, or new APK was performed. Deploy Web/backend together, deploy Admin and rebuild Android separately. Existing custom-token website sessions must sign in again. Physical-device and real-account production checks remain pending.
+
+
+## Homepage app promotion — 2026-11-14
+
+Open Homepage CMS > Mobile App Promotion. Edit copy and visibility; choose Hidden, Coming Soon or Available for each store. Available requires the real HTTPS listing URL. Save Settings and reload the public website. No deployment is needed for later content edits. Email subscriptions remain disabled until consent, collection, delivery and unsubscribe are implemented. Do not publish fixture store links. Apply the migration before updated Web/Admin releases. Focused checks: Web npx tsx --test server/app-promotion.test.ts; Admin node --experimental-strip-types --test tests/app-promotion.test.mjs.

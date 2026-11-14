@@ -53,3 +53,8 @@ Implemented: Web now uses verified Supabase sessions instead of custom tokens. P
 Local evidence: Web TypeScript and production build passed (existing large-bundle advisory); 5 session, 19 payment and 8 recovery tests passed. Local Edge fixtures passed login/reload, cross-tab logout, delayed-response logout, account switch, offline logout/reload and dashboard failure handling.
 
 Pending acceptance: coordinated release, real confirmed-account login/recovery, offline logout/restart, account-switch and Android device checks. Supabase working confirmation/catalog settings were left unchanged; user reported these working before this change.
+
+
+## Homepage app promotion — 2026-11-14
+
+Completed locally: app promotion editing/rendering, store validation, section hiding, load-failure save protection and hidden subscription form. Supabase migration and rollback-only authorization/save/reload checks passed. Local builds, 11 Web homepage/session tests, 21 payment tests and 1 Admin promotion test passed. Remaining: hosted release confirmation, actual store URLs when available, and authenticated Admin browser save/reload acceptance. No Android build required.

@@ -86,3 +86,8 @@ Verified: Web TypeScript, 8 recovery tests and production build passed. Headless
 **Verified:** Web TypeScript and production build passed (existing large-bundle advisory); 5 session, 19 payment and 8 recovery tests passed. Local Edge fixtures passed login/reload, cross-tab logout, delayed-response logout, account switch, offline logout/reload and dashboard failure handling.
 
 **Release:** No deployment, Supabase configuration/schema/data change, or new APK was performed. Deploy Web/backend together, deploy Admin and rebuild Android separately. Existing custom-token website sessions must sign in again. Physical-device and real-account production checks remain pending.
+
+
+## Homepage app promotion — 2026-11-14
+
+Implemented: Homepage CMS now edits the app promotion visibility, text, phone labels and per-store Hidden/Coming Soon/Available state. Available links require HTTPS store listing URLs without credentials. The unfinished email subscription section is removed. Failed Admin settings loads block saving and offer Retry. Both stores default to Coming Soon with no links. Supabase migration applied November 14; hosted application rollout pending verification.

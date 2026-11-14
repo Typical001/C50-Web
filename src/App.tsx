@@ -1,3 +1,5 @@
+import AppPromotion from './components/AppPromotion';
+import { defaultAppPromotion, readAppPromotion } from './lib/appPromotion';
 import { useWebsiteSession, completeWebsiteLogin, prepareWebsiteLogin, signOutWebsite } from './lib/webSession';
 import { currentAccessToken, sessionFetch, sessionGeneration } from './lib/sessionTransport';
 import TestSeriesCatalog from './components/TestSeriesCatalog';
@@ -7,7 +9,7 @@ import {
   BookOpen, LogIn, LogOut, User as UserIcon, LayoutDashboard,
   Search, Sparkles, X, Menu, Phone, Mail,
   MapPin, Check, Heart, HelpCircle, ChevronRight, ChevronLeft, ChevronDown, RefreshCw,
-  Award, Clock, Flame, PlaySquare, FileText, Upload, Play, ArrowRight, GraduationCap, TrendingUp, Video, Smartphone, Send, Star
+  Award, Clock, Flame, PlaySquare, FileText, Upload, Play, ArrowRight, GraduationCap, TrendingUp, Video, Star
 } from 'lucide-react';
 
 import { User, Batch } from './types';
@@ -68,6 +70,7 @@ function Website({ initialUser, sessionError }: { key?: number; initialUser: Use
 
   // Data States
   const [batches, setBatches] = useState<Batch[]>([]);
+  const [appPromotion, setAppPromotion] = useState(defaultAppPromotion);
   const [heroTitle, setHeroTitle] = useState('');
   const [heroSubtitle, setHeroSubtitle] = useState('');
   const [faculties, setFaculties] = useState<{ name: string; role: string; bio: string; imageUrl?: string }[]>([]);
@@ -201,8 +204,10 @@ function Website({ initialUser, sessionError }: { key?: number; initialUser: Use
   const loadHomepage = async () => {
     try {
       const res = await sessionFetch('/api/homepage');
+      if (!res.ok) throw new Error('Homepage settings unavailable');
       const data = await res.json();
       if (data) {
+        setAppPromotion(readAppPromotion(data.app_promotion));
         setHeroTitle(data.hero_title || '');
         setHeroSubtitle(data.hero_subtitle || '');
         if (data.testimonials && Array.isArray(data.testimonials)) {
@@ -1147,69 +1152,7 @@ onViewLectures={viewLectures}
                       </div>
                     )}
 
-                    <div className="max-w-7xl mx-auto px-6">
-                      <div className="apple-card p-10 bg-gradient-to-br from-zinc-900 to-black text-white relative overflow-hidden flex flex-col md:flex-row items-center justify-between gap-8">
-                        <div className="absolute top-0 right-0 p-12 opacity-5 pointer-events-none">
-                          <Smartphone className="w-64 h-64 text-white" />
-                        </div>
-
-                        <div className="text-left space-y-4 max-w-xl relative z-10">
-                          <span className="text-[9px] uppercase font-extrabold tracking-widest bg-white/15 px-3 py-1 rounded-full text-white">
-                            Mobile App
-                          </span>
-                          <h3 className="text-3xl font-extrabold sm:text-4xl tracking-tight leading-none">
-                            Study Anytime. Anywhere.
-                          </h3>
-                          <p className="text-xs text-gray-400 leading-relaxed">
-                            Download the Carrier-50 app to attend live sessions, save notes offline, write mock tests, and get real-time MPPSC updates on the go.
-                          </p>
-
-                          <div className="flex flex-wrap gap-4 pt-2">
-                            <button className="bg-white text-black font-extrabold text-xs px-5 py-2.5 rounded-xl hover:bg-gray-100 transition-all flex items-center gap-2 cursor-pointer shadow-md">
-                              <Play className="w-4 h-4 fill-black" /> Google Play
-                            </button>
-                            <button className="bg-white/10 hover:bg-white/20 text-white font-extrabold text-xs px-5 py-2.5 rounded-xl transition-all flex items-center gap-2 cursor-pointer">
-                              App Store (Coming Soon)
-                            </button>
-                          </div>
-                        </div>
-
-                        <div className="w-full max-w-[280px] shrink-0 relative z-10 bg-zinc-800 p-3 rounded-[32px] border border-zinc-700 shadow-2xl">
-                          <div className="aspect-[9/19] bg-zinc-950 rounded-[24px] overflow-hidden flex flex-col items-center justify-center p-6 border border-zinc-800">
-                            <div className="w-10 h-10 bg-[#6D5DF6] rounded-full flex items-center justify-center font-extrabold text-sm text-white mb-3">C</div>
-                            <p className="text-xs font-bold text-white tracking-tight">Carrier-50</p>
-                            <p className="text-[9px] text-gray-500 mt-1 uppercase font-bold tracking-widest">Active learning</p>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-
-                    <div className="max-w-7xl mx-auto px-6">
-                      <div className="apple-card p-10 bg-[#f8f7ff]/70 border border-gray-100 text-center space-y-6 max-w-3xl mx-auto">
-                        <div className="p-3 bg-[#6D5DF6]/10 text-[#6D5DF6] rounded-full w-12 h-12 flex items-center justify-center mx-auto">
-                          <Send className="w-5 h-5" />
-                        </div>
-
-                        <div className="space-y-2">
-                          <h3 className="text-2xl font-extrabold text-gray-900 tracking-tight font-sans">
-                            Stay Updated with MPPSC Notifications
-                          </h3>
-                          <p className="text-xs text-[#86868b] max-w-md mx-auto leading-relaxed">
-                            Subscribe to our weekly current affairs updates and state service notifications. No spam, unsubscribe anytime.
-                          </p>
-                          <div className="flex flex-col sm:flex-row gap-3 max-w-md mx-auto">
-                            <input
-                              type="email"
-                              placeholder="yourname@domain.com"
-                              className="flex-grow px-4 py-2.5 bg-white border border-gray-200 rounded-xl outline-none text-xs font-semibold focus:border-[#6D5DF6]/30 shadow-sm"
-                            />
-                            <button className="apple-btn-primary py-2.5 px-6 text-xs font-bold shrink-0">
-                              Subscribe
-                            </button>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
+                    <AppPromotion settings={appPromotion} />
 
                   </div>
                 )}
