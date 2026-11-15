@@ -16,6 +16,7 @@ import crypto from 'crypto';
 import { Request, Response, NextFunction } from 'express';
 import { createClient } from '@supabase/supabase-js';
 import { Payments, razorpayProvider } from './server/payments';
+import { googlePlayRoutes } from './server/google-play-routes';
 import { paymentStore } from './server/payment-store';
 import { paymentRoutes } from './server/payment-routes';
 import { recoveryRedirect } from './server/recovery-config';
@@ -253,6 +254,7 @@ app.use(payments.webhook);
 app.use(express.json({ limit: '30mb' }));
 app.use(express.urlencoded({ extended: true, limit: '30mb' }));
 app.use(payments.api);
+app.use(googlePlayRoutes(supabaseAdmin, requireAuth, requireAdmin));
 
 // Used by Render and other hosting providers to verify the service is running.
 // It intentionally does not depend on Supabase or any local file storage.
@@ -806,7 +808,8 @@ function mapPayment(payment: any): Payment {
     status: payment.status,
     currency: payment.currency || 'INR',
     amountPaise: payment.amount_paise,
-    gatewayMode: payment.gateway_mode,
+    gatewayMode: payment.payment_gateway === 'google_play' ? (payment.google_is_test ? 'test' : 'live') : payment.gateway_mode,
+    paymentGateway: payment.payment_gateway || 'razorpay',
     verifiedAt: payment.verified_at,
     paymentMethod: payment.payment_method,
     failureCode: payment.failure_code,

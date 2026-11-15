@@ -1,5 +1,14 @@
 # Roadmap — Shared platform
 
+## Google Play Billing rollout — 2026-11-15
+
+Implemented locally: Android native Play checkout/restore with store prices; backend account-bound Google verification and post-commit acknowledgement; shared cross-provider access; Admin immutable product mapping and provider-labelled ledger; Web ledger provider display. Razorpay remains the website/direct-APK provider.
+
+Applied: Supabase migrations 20261115062543 and 20261115062749. Google tokens/account bindings are server-only; current two paid-batch mappings remain disabled. Tested: Web TypeScript/build, 21 payment + 6 session regressions, 2 Google/isolated SQL tests; Admin lint (existing warnings) and build; Android TypeScript + 44 tests.
+
+Not complete: Google Cloud/Play credentials, RTDN/scheduler configuration, product activation, verified AAB upload/Internal release, physical-device acceptance, Google financial totals/refund catch-up and production release. Build cda43959-bd39-4a2b-abf2-88fc12678c27 (version code 5) requested; outcome pending. No real charge or production Play release. See [shared runbook](../../C50-Project/docs/google-play-billing.md).
+
+
 Last consolidated: 2026-11-09. Local source/configuration reviewed; historical test and hosted observations are dated below. This documentation pass did not rerun application tests or inspect live services.
 
 | Priority | Remaining work | Completion evidence required |
@@ -53,6 +62,20 @@ Implemented: Web now uses verified Supabase sessions instead of custom tokens. P
 Local evidence: Web TypeScript and production build passed (existing large-bundle advisory); 5 session, 19 payment and 8 recovery tests passed. Local Edge fixtures passed login/reload, cross-tab logout, delayed-response logout, account switch, offline logout/reload and dashboard failure handling.
 
 Pending acceptance: coordinated release, real confirmed-account login/recovery, offline logout/restart, account-switch and Android device checks. Supabase working confirmation/catalog settings were left unchanged; user reported these working before this change.
+
+## Provider failure acceptance — 2026-11-13
+
+Code/tests complete: 502 provider-error contract, preserved login, read-only credential diagnostic, 21 payment/6 session/8 recovery tests and Web build/type checks. Payment fix deployed at a74bcd1; Test credential check passed. User subsequently requested Live deployment after saving Live keys; verify final release outcome in CURRENT-STATE. Remaining: Live webhook/capture/account checks, actual controlled payment/access E2E, and reviewed handling of the pre-existing pending Test attempt. No database mutations authorized by this diagnostic.
+
+Live rollout verified November 13 at 22:42 IST: f9ce12123c4c9643e19efd243fc1fb819bc2c3f4 deployed successfully as dep-dbrk9js9v7es73cr9ad0. Render build diagnostic reported read-only Live authentication PASSED; no order/payment was created. Hosted /health and /api/batches returned 200, unauthenticated /api/auth/me returned 401 with no-store. These checks do not certify checkout/webhook/capture or settlement readiness.
+
+Final release: normal Render build command restored to npm ci --include=dev && npm run lint && npm run test:payments && npm run build. Follow-up deployment dep-dbrkadetlv9c738p7kng of f9ce121 succeeded November 13 at 22:44 IST. The one-time provider check is not a permanent deployment dependency. Web/backend are live; Live webhook delivery and actual checkout remain unverified.
+
+## Privacy policy acceptance — 2026-11-14
+
+Screenshot-based rewrite, complete contact identity, consistent adult eligibility/retention, responsive public page and local validation complete. Revision 455c87c contains only policy, minimal Terms alignment and focused tests. See CURRENT-STATE for hosted verification. Operational deletion fulfilment and age-policy handling remain owner responsibilities; this content change implements no automation.
+
+Published November 14: revision 455c87c000aa6710d2929a71caf127934a912c1f, Render deployment dep-dbs04b5bedkc73bkfpp0 reported Deploy succeeded | Live. Unauthenticated HTTPS GETs to /privacy, /privacy/ and /terms all returned 200 and matched the reviewed local HTML exactly (line-ending normalized). Live page visually checked; all five external provider/provenance links returned 200. No application behavior or database changes.
 
 
 ## Homepage app promotion — 2026-11-14

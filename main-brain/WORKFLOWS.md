@@ -55,7 +55,19 @@ Email confirmation and password recovery now have separate UI handling; untyped 
 
 Release Web and backend together: the new frontend needs GET /api/auth/me, and the backend rejects legacy tokens/endpoints. Verify fresh confirmed-user login, reload, account switch, offline sign-out then failed login/reload, cross-tab logout (Web/Admin), browser Back and Android foreground/back behavior. Check profiles, purchases and CMS drafts from account A never appear for B or on login. Browser-managed password autofill is outside app cache control. No deployment, Supabase configuration/schema/data change, or new APK was performed. Deploy Web/backend together, deploy Admin and rebuild Android separately. Existing custom-token website sessions must sign in again. Physical-device and real-account production checks remain pending.
 
+## Payment credential diagnosis — 2026-11-13
+
+Check upstream credentials using npm run check:payment-provider (read-only, Test default). Use -- --live only for an explicitly authorized Live-mode check. Configure secrets only in the backend host or ignored local environment. The customer website, Android and standalone Admin do not need API secrets; Checkout receives the public ID from create-order. Preserve receipt reconciliation after failed order creation. Verify webhook secret independently; it is not the API key secret. See the payment runbook for the HTTP 502 error contract.
+
+## Policy content maintenance — 2026-11-14
+
+Privacy and Terms now specify 18+ eligibility. Preserve consistency across privacy, Terms and deletion instructions when revising commitments. The 30-day payment-record period is measured from ownership verification for a deletion request. Run `npx tsx --test server/privacy-policy.test.ts` from Web and the existing Android privacy/account-deletion checks; verify public /privacy and /privacy/ without login. Provider links and disclosure wording must reflect actual features, not unused template clauses.
+
 
 ## Homepage app promotion — 2026-11-14
 
 Open Homepage CMS > Mobile App Promotion. Edit copy and visibility; choose Hidden, Coming Soon or Available for each store. Available requires the real HTTPS listing URL. Save Settings and reload the public website. No deployment is needed for later content edits. Email subscriptions remain disabled until consent, collection, delivery and unsubscribe are implemented. Do not publish fixture store links. Apply the migration before updated Web/Admin releases. Focused checks: Web npx tsx --test server/app-promotion.test.ts; Admin node --experimental-strip-types --test tests/app-promotion.test.mjs.
+
+## Google Play Billing — 2026-11-15
+
+See the [canonical Google Play contract and rollout workflow](../../C50-Project/docs/google-play-billing.md). Paid Play batches use verified non-consumable Google purchases; website/direct APK retains Razorpay. Shared enrollment is server-owned. Google tokens are private, product mappings immutable, store prices come from Google. Checkout remains disabled until configuration and Internal acceptance.

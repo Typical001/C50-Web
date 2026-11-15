@@ -23,6 +23,7 @@
     "@vitejs/plugin-react": "^5.0.4",
     "dotenv": "^17.2.3",
     "express": "^4.21.2",
+    "google-auth-library": "11.3.4",
     "lucide-react": "^0.546.0",
     "motion": "^12.23.24",
     "razorpay": "2.9.8",
@@ -31,6 +32,7 @@
     "vite": "^6.2.3"
   },
   "devDependencies": {
+    "@electric-sql/pglite": "0.5.16",
     "@types/express": "^4.17.21",
     "@types/node": "^22.14.0",
     "autoprefixer": "^10.4.21",

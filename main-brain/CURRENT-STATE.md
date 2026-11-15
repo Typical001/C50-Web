@@ -1,5 +1,14 @@
 # Current state — Web and shared backend
 
+## Google Play Billing rollout — 2026-11-15
+
+Implemented locally: Android native Play checkout/restore with store prices; backend account-bound Google verification and post-commit acknowledgement; shared cross-provider access; Admin immutable product mapping and provider-labelled ledger; Web ledger provider display. Razorpay remains the website/direct-APK provider.
+
+Applied: Supabase migrations 20261115062543 and 20261115062749. Google tokens/account bindings are server-only; current two paid-batch mappings remain disabled. Tested: Web TypeScript/build, 21 payment + 6 session regressions, 2 Google/isolated SQL tests; Admin lint (existing warnings) and build; Android TypeScript + 44 tests.
+
+Not complete: Google Cloud/Play credentials, RTDN/scheduler configuration, product activation, verified AAB upload/Internal release, physical-device acceptance, Google financial totals/refund catch-up and production release. Build cda43959-bd39-4a2b-abf2-88fc12678c27 (version code 5) requested; outcome pending. No real charge or production Play release. See [shared runbook](../../C50-Project/docs/google-play-billing.md).
+
+
 Last consolidated: 2026-11-09. Local source/configuration reviewed; historical test and hosted observations are dated below. This documentation pass did not rerun application tests or inspect live services.
 
 ## Evidence ledger
@@ -86,6 +95,32 @@ Verified: Web TypeScript, 8 recovery tests and production build passed. Headless
 **Verified:** Web TypeScript and production build passed (existing large-bundle advisory); 5 session, 19 payment and 8 recovery tests passed. Local Edge fixtures passed login/reload, cross-tab logout, delayed-response logout, account switch, offline logout/reload and dashboard failure handling.
 
 **Release:** No deployment, Supabase configuration/schema/data change, or new APK was performed. Deploy Web/backend together, deploy Admin and rebuild Android separately. Existing custom-token website sessions must sign in again. Physical-device and real-account production checks remain pending.
+
+## Razorpay provider authentication — 2026-11-13
+
+Implemented: upstream Razorpay credential rejection returns HTTP 502 with PAYMENT_PROVIDER_AUTH_FAILED and a sanitized payment-unavailable message. Genuine user-authentication errors remain 401; provider failure no longer triggers Web logout. Added a read-only backend credential/receipt diagnostic with default Test mode and an explicit --live option. No orders or charges are created by this diagnostic.
+
+Validation: Web TypeScript and production build passed (existing large-bundle warning); 21 payment tests, 6 session tests and 8 recovery tests passed. Coverage includes SDK credential rejection, corrected mocked credentials, HTTP error code, preserved customer session, genuine expired sessions and existing duplicate/ambiguous-order reconciliation. Initial failing SDK mock was corrected to an injected SDK factory; final suite passes without network calls.
+
+Deployment evidence: payment fix a74bcd153ea93d63a4b342df9f4225acccb3b81b deployed successfully on Render (dep-dbrfpviaujis73cslocg). Its read-only Test authentication passed and found zero provider orders for the inspected pending Test receipt. A subsequent user environment update supplied Live keys and failed the Test-only diagnostic (dep-dbrg25s9v7es73cg2uag), leaving the prior release live. User then explicitly authorized Live deployment with read-only verification and no charge. Revision f9ce121 adds the explicit Live diagnostic; final rollout result follows below.
+
+Data: one pending Test Batch purchase for INR 50 was inspected read-only; no provider order/payment/verification was stored. No user, payment, enrollment or Supabase settings were modified. Do not reuse the Test intent under Live keys or delete it blindly. Separate reviewed retirement/reconciliation is required for this user's next purchase of the same batch.
+
+Remaining: verify matching Live webhook endpoint/secret and payment.captured, order.paid, payment.failed delivery, automatic capture, account readiness and actual end-to-end checkout/access/Admin reconciliation. No real charge or native APK test occurred. Local ignored .env still has the old failing Test credentials; update it only if local payment development is needed. Never copy secrets into clients or documentation.
+
+Live rollout verified November 13 at 22:42 IST: f9ce12123c4c9643e19efd243fc1fb819bc2c3f4 deployed successfully as dep-dbrk9js9v7es73cr9ad0. Render build diagnostic reported read-only Live authentication PASSED; no order/payment was created. Hosted /health and /api/batches returned 200, unauthenticated /api/auth/me returned 401 with no-store. These checks do not certify checkout/webhook/capture or settlement readiness.
+
+Final release: normal Render build command restored to npm ci --include=dev && npm run lint && npm run test:payments && npm run build. Follow-up deployment dep-dbrkadetlv9c738p7kng of f9ce121 succeeded November 13 at 22:44 IST. The one-time provider check is not a permanent deployment dependency. Web/backend are live; Live webhook delivery and actual checkout remain unverified.
+
+## Privacy notice rewrite — 2026-11-14
+
+Implemented the owner-approved screenshot-based rewrite: Carrier-50 Institute / Carrier50 / C50 Academy, legal owner Sunil Rajput, supplied Gwalior address and support email, dated November 14. Added summary, linked contents and twelve accessible sections. Omitted incomplete Cookie Notice references and unsupported push/advertising/device-identifier claims; retained actual provider, learning, payment and storage disclosures. Termly attribution identifies draft provenance only.
+
+Policy decision: adults aged 18 or older; Terms now agrees. No age gate or automated age verification was added. Retention remains 30 days after ownership verification for deletion requests, with legal/dispute exceptions; clarified that the payment-record period applies to deletion requests, not all purchases after payment. Existing deletion page and operational process were not changed.
+
+Validation: 7 privacy/deletion tests passed (including two new Web policy regressions), Web TypeScript and production build passed. Existing large-bundle advisory remains. In-app browser inspected 1280px desktop and 375px mobile layouts, no horizontal overflow; section targets and Enter-key navigation/focus passed. Publication revision 455c87c; live verification is recorded below when complete. No API, Supabase, payment configuration, Android behavior or user-record changes.
+
+Published November 14: revision 455c87c000aa6710d2929a71caf127934a912c1f, Render deployment dep-dbs04b5bedkc73bkfpp0 reported Deploy succeeded | Live. Unauthenticated HTTPS GETs to /privacy, /privacy/ and /terms all returned 200 and matched the reviewed local HTML exactly (line-ending normalized). Live page visually checked; all five external provider/provenance links returned 200. No application behavior or database changes.
 
 
 ## Homepage app promotion — 2026-11-14
