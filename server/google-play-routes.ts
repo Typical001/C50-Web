@@ -10,8 +10,8 @@ export function googlePlayRoutes(db: SupabaseClient, auth: RequestHandler, admin
   const google = googlePlayProvider();
   const oidc = new OAuth2Client();
   const testers = new Set((process.env.GOOGLE_PLAY_TESTER_USER_IDS || '').split(',').map(x => x.trim()).filter(Boolean));
-  const enabled = () => {
-    if (process.env.GOOGLE_PLAY_BILLING_ENABLED !== 'true') throw new PaymentError(503, 'Google Play checkout is not available yet.');
+  const enabled = (userId: string) => {
+    if (process.env.GOOGLE_PLAY_BILLING_ENABLED !== 'true' && !testers.has(userId)) throw new PaymentError(503, 'Google Play checkout is not available yet.');
   };
   async function one(query: any): Promise<any> {
     const { data, error } = await query;
@@ -66,15 +66,15 @@ export function googlePlayRoutes(db: SupabaseClient, auth: RequestHandler, admin
     const access = await one(db.rpc('has_active_batch_access', { p_user_id: account.user_id, p_batch_id: mapping.batch_id }));
     return { paymentId, batchId: mapping.batch_id, state: verified.state, hasAccess: access === true };
   }
-  router.get('/api/google-play/catalog', auth, limit, run(async () => {
-    enabled();
+  router.get('/api/google-play/catalog', auth, limit, run(async req => {
+    enabled(req.user.id);
     const mappings = await one(db.from('google_play_products').select('batch_id,product_id').eq('enabled', true));
     const batches = await one(db.from('batches').select('id').eq('is_active', true).eq('catalog_visible', true).eq('is_paid', true).eq('payment_enabled', true));
     const ids = new Set(batches.map((b: any) => b.id));
     return mappings.filter((m: any) => ids.has(m.batch_id));
   }));
   router.post('/api/google-play/prepare', auth, limit, run(async req => {
-    enabled(); onlyFields(req.body, ['batchId']);
+    enabled(req.user.id); onlyFields(req.body, ['batchId']);
     if (typeof req.body.batchId !== 'string' || !/^[a-f0-9-]{36}$/i.test(req.body.batchId)) throw new PaymentError(400, 'Invalid batch.');
     const batch = await one(db.from('batches').select('id,is_active,is_paid,catalog_visible,payment_enabled').eq('id', req.body.batchId).maybeSingle());
     const mapping = await one(db.from('google_play_products').select('*').eq('batch_id', req.body.batchId).eq('enabled', true).maybeSingle());

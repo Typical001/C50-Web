@@ -113,3 +113,36 @@ test('scheduled reconciliation rejects missing/wrong credentials and fails close
     else process.env.GOOGLE_PLAY_RECONCILE_SECRET = previous;
   }
 });
+
+test('disabled checkout permits only configured authenticated testers', async () => {
+  const previousEnabled = process.env.GOOGLE_PLAY_BILLING_ENABLED;
+  const previousTesters = process.env.GOOGLE_PLAY_TESTER_USER_IDS;
+  process.env.GOOGLE_PLAY_BILLING_ENABLED = 'false';
+  process.env.GOOGLE_PLAY_TESTER_USER_IDS = 'fixture-tester';
+  let userId = 'ordinary-user';
+  let queries = 0;
+  const db = { from: () => {
+    queries++;
+    const query: any = { select: () => query, eq: () => query, then: (resolve: any) => Promise.resolve({data: [], error: null}).then(resolve) };
+    return query;
+  }};
+  const app = express(); app.use(express.json());
+  const auth: express.RequestHandler = (req: any, _res, next) => { req.user = {id: userId}; next(); };
+  app.use(googlePlayRoutes(db as any, auth, (_req,res) => { res.sendStatus(403); }));
+  const server = app.listen(0,'127.0.0.1');
+  await new Promise<void>(resolve => server.once('listening',resolve));
+  const base = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
+  try {
+    assert.equal((await fetch(`${base}/api/google-play/catalog`)).status,503);
+    assert.equal((await fetch(`${base}/api/google-play/prepare`,{method:'POST',headers:{'Content-Type':'application/json'},body:'{}'})).status,503);
+    assert.equal(queries,0);
+    userId='fixture-tester';
+    assert.equal((await fetch(`${base}/api/google-play/catalog`)).status,200);
+    assert.equal(queries,2);
+    assert.equal((await fetch(`${base}/api/google-play/prepare`,{method:'POST',headers:{'Content-Type':'application/json'},body:'{}'})).status,400);
+  } finally {
+    server.closeAllConnections(); await new Promise<void>(resolve=>server.close(()=>resolve()));
+    if(previousEnabled===undefined) delete process.env.GOOGLE_PLAY_BILLING_ENABLED; else process.env.GOOGLE_PLAY_BILLING_ENABLED=previousEnabled;
+    if(previousTesters===undefined) delete process.env.GOOGLE_PLAY_TESTER_USER_IDS; else process.env.GOOGLE_PLAY_TESTER_USER_IDS=previousTesters;
+  }
+});

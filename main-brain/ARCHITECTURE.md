@@ -95,3 +95,7 @@ homepage_settings.app_promotion is an additive non-null JSONB object containing 
 ## Google Play Billing — 2026-11-15
 
 See the [canonical Google Play contract and rollout workflow](../../C50-Project/docs/google-play-billing.md). Paid Play batches use verified non-consumable Google purchases; website/direct APK retains Razorpay. Shared enrollment is server-owned. Google tokens are private, product mappings immutable, store prices come from Google. Checkout remains disabled until configuration and Internal acceptance.
+
+## Google reconciliation transport — 2026-11-16
+
+The server accepts the existing environment secret or a service-role-only Vault validator. The private cron job invokes HTTPS directly through the http extension, with bounded timeout and status-only logs, every ten minutes. It does not place secrets in pg_net. Each request checks up to 10 non-cancelled purchases, prioritizing unacknowledged then oldest checked, with at most five concurrent provider calls. Failed attempts advance checked_at to avoid starvation and return 503 for retry. Monitor private play_reconciliation_runs and cron status; 200 with zero records is not purchase acceptance. The production target supersedes earlier Internal-only workflow wording; release/device acceptance remains outstanding.

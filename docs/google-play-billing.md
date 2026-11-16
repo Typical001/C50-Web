@@ -1,10 +1,10 @@
 # Google Play Billing runbook
 
-## Current rollout — November 15, 2026
+## Historical rollout — November 15, 2026
 
 Implementation is staged for Internal testing, not production acceptance. Website/direct APK Razorpay remains unchanged. Supabase migrations `20261115062543` and `20261115062749` are applied. Two current paid batches have disabled product mappings. No Google purchase or real charge has been performed.
 
-Android build requested: `cda43959-bd39-4a2b-abf2-88fc12678c27`, profile `play-internal`, package `com.carrier50.c50academy`, version code 5. EAS reports FINISHED. Play Console accepted version 5 in a saved Internal testing draft. The track remains paused; no tester rollout yet. This build uses a working-tree upload; its displayed Git HEAD is not a complete source revision.
+Android build requested: `cda43959-bd39-4a2b-abf2-88fc12678c27`, profile `play-internal`, package `com.carrier50.c50academy`, version code 5. EAS reports FINISHED. Play Console accepted version 5 in a saved Internal testing draft. Correction recorded November 16: the Internal track was resumed on November 15; the earlier paused observation is superseded. A production draft is now saved, not submitted. This build uses a working-tree upload; its displayed Git HEAD is not a complete source revision.
 
 ## Shared access contract
 
@@ -16,7 +16,7 @@ The backend queries Google's productsv2 API, checks product, quantity, account b
 
 Acknowledgement runs after the durable transaction and is retried by reconciliation. The app never consumes a purchase. Product IDs cannot be remapped after saving. Existing private purchase records support restore even after catalog removal.
 
-The productsv2 response alone does not provide an authoritative charge total. Local code now fetches the separate Google Orders API, binds its order/token/product, validates currency and decimal amount, and stores google_order_total/currency/state. Web/Admin display verified totals when available; otherwise they identify a Google Play order without showing the legacy zero placeholder as revenue. Full refunds/cancellations revoke that purchase through the existing atomic access path. Partial-refund financial reporting and ordered financial snapshots remain follow-up work. This financial change is not deployed as of the November 16 checkpoint below.
+The productsv2 response alone does not provide an authoritative charge total. Local code now fetches the separate Google Orders API, binds its order/token/product, validates currency and decimal amount, and stores google_order_total/currency/state. Web/Admin display verified totals when available; otherwise they identify a Google Play order without showing the legacy zero placeholder as revenue. Full refunds/cancellations revoke that purchase through the existing atomic access path. Partial-refund financial reporting and ordered financial snapshots remain follow-up work. This financial change is deployed in Web as of the later November 16 checkpoint below; Admin hosted verification remains outstanding.
 
 ## Backend configuration (names only)
 
@@ -28,7 +28,7 @@ The productsv2 response alone does not provide an authoritative charge total. Lo
 
 Routes: authenticated GET `/api/google-play/catalog`, POST `/prepare`, POST `/verify`; administrator GET `/api/admin/google-play/products` and PUT `/api/admin/google-play/products/:batchId`; authenticated Pub/Sub POST `/api/google-play/rtdn`; secret-authenticated POST `/api/google-play/reconcile`.
 
-The reconciliation route scans 50 oldest non-cancelled records per invocation, requeries Google, and retries acknowledgement. Configure a durable scheduler and monitoring before enabling sales; an endpoint alone is not a running job. Monitor failed calls and acknowledgement age. Pub/Sub errors request redelivery; processing is idempotent by purchase token, not dependent on event order. Unknown/unbound purchases are rejected for investigation. Long-term invalid-token repair, voided-purchase catch-up, acknowledgement retry prioritization and large-ledger scheduling need additional acceptance before production.
+The reconciliation route scans up to 10 non-cancelled records per invocation, prioritizing unacknowledged then oldest checked, with concurrency five, requeries Google, and retries acknowledgement. Configure a durable scheduler and monitoring before enabling sales; an endpoint alone is not a running job. Monitor failed calls and acknowledgement age. Pub/Sub errors request redelivery; processing is idempotent by purchase token, not dependent on event order. Unknown/unbound purchases are rejected for investigation. Long-term invalid-token repair, voided-purchase catch-up, acknowledgement retry prioritization and large-ledger scheduling need additional acceptance before production.
 
 ## Console setup and release
 
@@ -64,3 +64,27 @@ After explicit approval, the verifier service account is Active in Play Console 
 User changed the release target to production on November 16. This supersedes the earlier Internal-only release authorization; it does not establish production readiness or a completed submission. No real charge has been made. Supplied financial-account details are not stored in project documentation.
 
 Local validation today: Web TypeScript/build, 21 payment tests, 6 session tests and 3 Google/SQL tests passed. Admin lint/build passed with existing lint warnings. Financial-total changes are local and not deployed yet. The local migration file for already-applied 20261115144004 has been restored and tested in isolated PGlite. Physical-device purchase/restore/refund acceptance remains outstanding.
+
+
+## Google Play rollout checkpoint — 2026-11-16 17:10 IST
+
+Supersedes earlier November 15/16 setup-pending observations. Production is the user-authorized target. Version 5 is saved as a production draft, not submitted or live; physical-device payment/restore acceptance is outstanding. Both India-only Buy products remain drafts and checkout/mappings remain disabled.
+
+The dedicated verifier has Carrier50-only read, financial and order-management permissions. Render revision d61a1bf86d970fced916d2c94ae8cd308cbac2a5 is deployed (dep-dbtelij2o0lc73ejn3l0). Its read-only Google purchase API authentication PASSED at 17:07 IST, resolving the earlier 401 permissionDenied observation without broadening access. No purchase or charge was created. Financial-total code is deployed in Web; Admin commit 4975f8d was pushed, but its exact hosted revision is not yet established.
+
+Pub/Sub topic, authenticated push subscription, topic-only Google publisher grant and Play RTDN settings are configured. Full test-notification delivery confirmation remains to be recorded. Scheduled reconciliation is enabled every ten minutes. A manual invocation reached the deployed backend with HTTP 200 on an empty Google purchase ledger; this verifies transport/authentication, not real-purchase processing.
+
+Migrations 20261116112806, 20261116112940 and 20261116113506 are applied. Managed pg_net grants could not be restricted by postgres; the final transport uses synchronous http directly, never placing the Vault credential in the net queue. The unused queue log contains zero requests. Private run logs retain only time/status; client roles cannot invoke the Vault validator or access the private schema. Do not revert to the older queued transport.
+
+Validation rerun: Web TypeScript/build passed (existing large-bundle warning); 31 focused tests passed: 4 Google/SQL/reconciliation, 21 payment and 6 session/mobile-session tests. No Android rebuild or device acceptance was performed in this continuation. Security advisor reports expected private-table no-policy notices plus existing access-helper and leaked-password-protection warnings; no claim of a clean full security audit.
+
+Remaining: notification delivery proof, product option review/activation, controlled device acceptance, exact Admin hosted verification and production submission. Partial-refund reporting, stale financial snapshots and voided-purchase catch-up remain operational follow-ups.
+
+Transport reference: [Supabase http extension](https://supabase.com/docs/guides/database/extensions/http). GOOGLE_PLAY_RECONCILE_SECRET is optional when using the service-only Vault validator. The cron job uses direct HTTPS and private status-only run logs. No secret values belong in commands or documentation.
+
+
+### Later November 16 verification
+
+Google RTDN test reception was confirmed in Render with the sanitized authenticated-test acceptance log. Reconciliation now has 40 HTTP-200 runs, all while the Google purchase ledger is empty. Both India-only Buy options are active at INR 50 and INR 2499 with multi-quantity disabled. Version 5 is saved in Publishing overview for production: no blocking validation errors, one missing-deobfuscation-file warning; not submitted yet. Hosted Admin bundle index-DA-FEKlX.js contains the Google total/currency fields and mapping editor, though exact Netlify deployment revision has not been checked.
+
+Added a tester-only exception to the disabled checkout gate, using authenticated user IDs already configured in GOOGLE_PLAY_TESTER_USER_IDS. This allows controlled acceptance without exposing checkout to other users. Five Google tests and fresh TypeScript/build passed; prior 31-test suite results remain separately dated. User supplied a confirmed student account for acceptance. License-test setup and physical-device purchase/restore checks are in progress.
