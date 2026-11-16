@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { PGlite } from '@electric-sql/pglite';
-import { validatePlayPurchase } from './google-play';
+import { validatePlayPurchase, verifiedOrderTotal } from './google-play';
 
 const receipt = { productLineItem: [{ productId: 'batch_1', quantity: 1 }], obfuscatedExternalAccountId: 'account', purchaseStateContext: { purchaseState: 'PURCHASED' } };
 test('Google verification rejects wrong account, product, quantity, unknown state and unauthorized tests', () => {
@@ -35,6 +35,7 @@ test('SQL migration: private tokens, pending denial, replay, account binding, ca
     const u = '00000000-0000-4000-8000-000000000001', other = '00000000-0000-4000-8000-000000000002', b = '00000000-0000-4000-8000-000000000003';
     await db.exec(`insert into auth.users values('${u}'),('${other}'); insert into public.batches values('${b}',true,true,true,true); insert into public.google_play_products(batch_id,product_id) values('${b}','batch_1');`);
     await db.exec(await readFile(new URL('../supabase/migrations/20261115062749_google_play_catalog_bindings.sql', import.meta.url), 'utf8'));
+    await db.exec(await readFile(new URL('../supabase/migrations/20261115144004_google_play_order_totals.sql', import.meta.url), 'utf8'));
     await assert.rejects(db.exec(`update public.google_play_products set product_id='changed' where batch_id='${b}'`));
     const record = async (state: string, user = u) => db.query('select public.record_google_play_purchase($1,$2,$3,$4,$5,$6,$7,$8) as id', ['a'.repeat(64), 'fixture-token-only', user, b, 'batch_1', state, 'fixture-order', true]);
     const access = async () => (await db.query<{ access: boolean }>('select public.has_active_batch_access($1,$2) as access',[u,b])).rows[0].access;
@@ -42,6 +43,9 @@ test('SQL migration: private tokens, pending denial, replay, account binding, ca
     await record('PURCHASED'); assert.equal(await access(),true);
     await record('PURCHASED');
     assert.equal((await db.query<{ count: number }>('select count(*)::int as count from public.payments')).rows[0].count,1);
+    await assert.rejects(db.exec("update public.payments set google_order_total=-1"));
+    await assert.rejects(db.exec("update public.payments set google_order_currency='invalid'"));
+    await assert.rejects(db.exec("update public.payments set google_order_state='UNKNOWN'"));
     await assert.rejects(record('PURCHASED',other));
     await record('PENDING'); assert.equal(await access(),true);
     await record('CANCELLED'); assert.equal(await access(),false);
@@ -55,4 +59,12 @@ test('SQL migration: private tokens, pending denial, replay, account binding, ca
     await assert.rejects(db.exec(`insert into public.google_play_products(batch_id,product_id) values('${b}','bad')`));
     await db.exec('reset role');
   } finally { await db.close(); }
+});
+
+test('Google totals are bound to the verified token/product and retain decimal precision', () => {
+ const order = { orderId: 'order', purchaseToken: 'token', state: 'PROCESSED', lineItems: [{productId:'product'}], total: {currencyCode:'INR',units:'49',nanos:990000000} };
+ assert.deepEqual(verifiedOrderTotal(order,'order','token','product'),{total:'49.990000000',currency:'INR',state:'PROCESSED'});
+ assert.throws(() => verifiedOrderTotal(order,'order','stolen','product'));
+ assert.throws(() => verifiedOrderTotal({...order,total:undefined},'order','token','product'));
+ assert.throws(() => verifiedOrderTotal({...order,total:{...order.total,nanos:1e9}},'order','token','product'));
 });

@@ -4,7 +4,7 @@
 
 Implementation is staged for Internal testing, not production acceptance. Website/direct APK Razorpay remains unchanged. Supabase migrations `20261115062543` and `20261115062749` are applied. Two current paid batches have disabled product mappings. No Google purchase or real charge has been performed.
 
-Android build requested: `cda43959-bd39-4a2b-abf2-88fc12678c27`, profile `play-internal`, package `com.carrier50.c50academy`, version code 5. Build outcome and Play upload must be verified separately. This build uses a working-tree upload; its displayed Git HEAD is not a complete source revision.
+Android build requested: `cda43959-bd39-4a2b-abf2-88fc12678c27`, profile `play-internal`, package `com.carrier50.c50academy`, version code 5. EAS reports FINISHED. Play Console accepted version 5 in a saved Internal testing draft. The track remains paused; no tester rollout yet. This build uses a working-tree upload; its displayed Git HEAD is not a complete source revision.
 
 ## Shared access contract
 
@@ -16,7 +16,7 @@ The backend queries Google's productsv2 API, checks product, quantity, account b
 
 Acknowledgement runs after the durable transaction and is retried by reconciliation. The app never consumes a purchase. Product IDs cannot be remapped after saving. Existing private purchase records support restore even after catalog removal.
 
-Google verification does not return an authoritative charge total. Google ledger records therefore have a zero legacy amount placeholder, null `amount_paise`/`gateway_mode`, `payment_gateway=google_play`, `google_is_test`, and a Google order reference. Web/Admin explicitly display Google Play order rather than presenting zero as a price. Financial reporting must not sum the placeholder as verified revenue. Fetching Google Orders totals and partial-refund financial reconciliation remain release work.
+The productsv2 response alone does not provide an authoritative charge total. Local code now fetches the separate Google Orders API, binds its order/token/product, validates currency and decimal amount, and stores google_order_total/currency/state. Web/Admin display verified totals when available; otherwise they identify a Google Play order without showing the legacy zero placeholder as revenue. Full refunds/cancellations revoke that purchase through the existing atomic access path. Partial-refund financial reporting and ordered financial snapshots remain follow-up work. This financial change is not deployed as of the November 16 checkpoint below.
 
 ## Backend configuration (names only)
 
@@ -48,3 +48,19 @@ November 15: Web TypeScript and production build passed; 21 existing payment tes
 Supabase security advisor: two expected no-policy notices for deliberately server-only Google tables; existing authenticated SECURITY DEFINER helper warnings (caller checks retained) and leaked-password protection warning remain. These are not a claim of a clean full security audit.
 
 References: [Google purchase lifecycle](https://developer.android.com/google/play/billing/lifecycle/one-time), [purchase verification](https://developers.google.com/android-publisher/api-ref/rest/v3/purchases.productsv2/getproductpurchasev2), [Orders financial data](https://developers.google.com/android-publisher/api-ref/rest/v3/orders).
+
+## Hosted progress — November 15, 2026
+
+Web/backend revision 361815c557478fcc9b0c6e5b399ac796783f35dc is Live on Render, deployment dep-dbss4p95efls73f3rg40. Public health returned 200; unauthenticated Google catalog and Admin mapping endpoints returned 401. Admin revision 2f2d22a is published: hosted bundle index-DgHi4oF3.js contains the Google mapping editor and ledger fields. Authenticated Admin UI/save acceptance remains outstanding.
+
+Cloud project c50-play-billing-20261115 (number 431508870911) created under the user-selected Google account. Android Publisher API enabled after explicit terms approval. Service account c50-play-verifier@c50-play-billing-20261115.iam.gserviceaccount.com created without project-wide roles. User credential creation/Render secret entry handoff is pending; Play app permissions, Pub/Sub and scheduler are not yet configured.
+
+## Google Play configuration progress — 2026-11-16
+
+Render environment-update deployment dep-dbt9l7c9v7es73a055ng succeeded at revision 361815c557478fcc9b0c6e5b399ac796783f35dc. The GOOGLE_APPLICATION_CREDENTIALS variable and google-play-verifier.json secret filename are present; credential contents were not displayed. Google API authentication remains to be checked from the server.
+
+After explicit approval, the verifier service account is Active in Play Console with Carrier50-only read, financial and order-management permissions (no Admin/release grants). Cloud Pub/Sub API is enabled and the c50-play-purchases topic exists. Both batch products are saved as India-only Buy drafts, Test 1 INR 2499 and Test Batch INR 50; Google bulk price rounding was corrected before saving. Notification subscription, publisher grant, RTDN configuration and scheduled reconciliation are not yet complete. Product mappings and checkout remain disabled.
+
+User changed the release target to production on November 16. This supersedes the earlier Internal-only release authorization; it does not establish production readiness or a completed submission. No real charge has been made. Supplied financial-account details are not stored in project documentation.
+
+Local validation today: Web TypeScript/build, 21 payment tests, 6 session tests and 3 Google/SQL tests passed. Admin lint/build passed with existing lint warnings. Financial-total changes are local and not deployed yet. The local migration file for already-applied 20261115144004 has been restored and tested in isolated PGlite. Physical-device purchase/restore/refund acceptance remains outstanding.

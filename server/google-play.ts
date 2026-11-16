@@ -10,6 +10,18 @@ export interface PlayPurchase {
   testPurchaseContext?: unknown;
   orderId?: string;
 }
+export interface PlayOrder {
+  orderId?: string; purchaseToken?: string; state?: string;
+  lineItems?: Array<{ productId?: string }>;
+  total?: { currencyCode?: string; units?: string; nanos?: number };
+}
+export function verifiedOrderTotal(order: PlayOrder, orderId: string, token: string, product: string) {
+  if (order.orderId !== orderId || order.purchaseToken !== token || order.lineItems?.length !== 1 || order.lineItems[0].productId !== product) throw new PaymentError(409, 'Google order mismatch.');
+  const { units = '0', nanos = 0, currencyCode } = order.total || {};
+  if (!order.total || !/^[A-Z]{3}$/.test(currencyCode || '') || !/^\d{1,11}$/.test(units) || !Number.isInteger(nanos) || nanos < 0 || nanos >= 1e9) throw new PaymentError(503, 'Google order total unavailable.');
+  if (!['PENDING', 'PROCESSED', 'CANCELED', 'PENDING_REFUND', 'PARTIALLY_REFUNDED', 'REFUNDED'].includes(order.state || '')) throw new PaymentError(503, 'Google order state unavailable.');
+  return { total: `${units}.${String(nanos).padStart(9, '0')}`, currency: currencyCode!, state: order.state! };
+}
 export function validatePlayPurchase(purchase: PlayPurchase, product: string, account: string, allowTest: boolean) {
   if (purchase.obfuscatedExternalAccountId !== account || !account) throw new PaymentError(403, 'This purchase belongs to a different learning account.');
   if (purchase.productLineItem?.length !== 1 || purchase.productLineItem[0].productId !== product || (purchase.productLineItem[0].quantity ?? 1) !== 1) {
@@ -33,6 +45,7 @@ export function googlePlayProvider() {
   }
   return {
     get: (token: string) => request<PlayPurchase>(`purchases/productsv2/tokens/${encodeURIComponent(token)}`),
+    order: (id: string) => request<PlayOrder>(`orders/${encodeURIComponent(id)}?fields=orderId,purchaseToken,state,total,lineItems(productId)`),
     acknowledge: (product: string, token: string) => request(`purchases/products/${encodeURIComponent(product)}/tokens/${encodeURIComponent(token)}:acknowledge`, 'POST'),
   };
 }

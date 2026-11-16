@@ -3,7 +3,7 @@ import crypto from 'node:crypto';
 import { OAuth2Client } from 'google-auth-library';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { PaymentError, onlyFields } from './payments';
-import { googlePlayProvider, PLAY_PACKAGE, validatePlayPurchase } from './google-play';
+import { googlePlayProvider, PLAY_PACKAGE, validatePlayPurchase, verifiedOrderTotal } from './google-play';
 
 export function googlePlayRoutes(db: SupabaseClient, auth: RequestHandler, admin: RequestHandler) {
   const router = express.Router();
@@ -44,11 +44,18 @@ export function googlePlayRoutes(db: SupabaseClient, auth: RequestHandler, admin
     const account = await one(db.from('google_play_accounts').select('*').eq('account_id', accountId).maybeSingle());
     if (!account || (user && account.user_id !== user)) throw new PaymentError(403, 'This purchase belongs to another learning account.');
     const verified = validatePlayPurchase(purchase, product, account.account_id, testers.has(account.user_id));
+    let financial: ReturnType<typeof verifiedOrderTotal> | undefined;
+    if (purchase.orderId) {
+      try { financial = verifiedOrderTotal(await google.order(purchase.orderId), purchase.orderId, token, product); }
+      catch (error) { if (error instanceof PaymentError && error.status === 409) throw error; }
+    }
+    if (financial?.state === 'REFUNDED' || financial?.state === 'CANCELED') verified.state = 'CANCELLED';
     const hash = crypto.createHash('sha256').update(token).digest('hex');
     const paymentId = await one(db.rpc('record_google_play_purchase', {
       p_hash: hash, p_token: token, p_user: account.user_id, p_batch: mapping.batch_id,
       p_product: product, p_state: verified.state, p_order: purchase.orderId || null, p_test: verified.test,
     }));
+    if (financial) await one(db.from('payments').update({ google_order_total: financial.total, google_order_currency: financial.currency, google_order_state: financial.state }).eq('id', paymentId).eq('payment_gateway', 'google_play'));
     // Durable entitlement precedes acknowledgement. A failed acknowledgement is retried by reconciliation.
     if (verified.state === 'PURCHASED') {
       try {

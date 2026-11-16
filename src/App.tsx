@@ -1350,7 +1350,7 @@ onViewLectures={viewLectures}
                                     <p className="text-[10px] text-gray-400 mt-0.5">Order: {p.razorpayOrderId}</p>
                                   </div>
                                   <div className="text-right">
-                                    <p className="font-extrabold text-gray-900">{p.paymentGateway === 'google_play' ? 'Google Play order' : `₹${p.amount}`}</p>
+                                    <p className="font-extrabold text-gray-900">{p.paymentGateway === 'google_play' && !p.amountVerified ? 'Google Play order' : `${p.currency || 'INR'} ${p.amount}`}</p>
                                     <span className="text-[9px] font-bold text-emerald-600">SUCCESS</span>
                                   </div>
                                 </div>
