@@ -10,8 +10,8 @@ try {
   const auth = new GoogleAuth({ scopes: ['https://www.googleapis.com/auth/androidpublisher'] });
   const client = await auth.getClient();
   await client.request({
-    url: 'https://androidpublisher.googleapis.com/androidpublisher/v3/applications/com.carrier50.c50academy/inappproducts',
-    params: { maxResults: 1, fields: 'inappproduct' },
+    url: 'https://androidpublisher.googleapis.com/androidpublisher/v3/applications/com.carrier50.c50academy/purchases/voidedpurchases',
+    params: { maxResults: 1, fields: 'tokenPagination' },
     timeout: 15000,
   });
   console.log('Google Play read-only provider authentication: PASSED');
