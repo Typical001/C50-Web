@@ -111,7 +111,10 @@ export function googlePlayRoutes(db: SupabaseClient, auth: RequestHandler, admin
     let event;
     try { event = JSON.parse(Buffer.from(req.body.message.data, 'base64').toString('utf8')); } catch { throw new PaymentError(400, 'Invalid notification.'); }
     if (event.packageName !== PLAY_PACKAGE) throw new PaymentError(400, 'Wrong application.');
-    if (event.testNotification) return { received: true };
+    if (event.testNotification) {
+      console.info('Google Play authenticated test notification accepted');
+      return { received: true };
+    }
     const token = event.oneTimeProductNotification?.purchaseToken || event.voidedPurchaseNotification?.purchaseToken;
     if (token) await verify(token);
     return { received: true };
@@ -119,11 +122,21 @@ export function googlePlayRoutes(db: SupabaseClient, auth: RequestHandler, admin
   router.post('/api/google-play/reconcile', run(async req => {
     const secret = process.env.GOOGLE_PLAY_RECONCILE_SECRET || '';
     const actual = (req.headers.authorization || '').replace(/^Bearer /, '');
-    if (secret.length < 32 || Buffer.byteLength(actual) !== Buffer.byteLength(secret) || !crypto.timingSafeEqual(Buffer.from(actual), Buffer.from(secret))) throw new PaymentError(401, 'Invalid reconciliation authentication.');
-    const rows = await one(db.from('google_play_purchases').select('token_hash,purchase_token').neq('state', 'CANCELLED').order('checked_at').limit(50));
+    const environmentMatch = secret.length >= 32 && Buffer.byteLength(actual) === Buffer.byteLength(secret) && crypto.timingSafeEqual(Buffer.from(actual), Buffer.from(secret));
+    const vaultMatch = !environmentMatch && actual.length >= 32 && actual.length <= 256
+      ? await one(db.rpc('validate_google_play_reconcile_token', { p_token: actual })) : false;
+    if (!environmentMatch && vaultMatch !== true) throw new PaymentError(401, 'Invalid reconciliation authentication.');
+    const rows = await one(db.from('google_play_purchases').select('token_hash,purchase_token').neq('state', 'CANCELLED').order('acknowledged').order('checked_at').limit(10));
     let failed = 0;
-    for (const row of rows) {
-      try { await verify(row.purchase_token); } catch { failed++; }
+    for (let start = 0; start < rows.length; start += 5) {
+      await Promise.all(rows.slice(start, start + 5).map(async (row: any) => {
+        try { await verify(row.purchase_token); }
+        catch {
+          failed++;
+          // Advance failed attempts so an invalid token cannot starve the retry queue.
+          await db.from('google_play_purchases').update({ checked_at: new Date().toISOString() }).eq('token_hash', row.token_hash);
+        }
+      }));
     }
     if (failed) throw new PaymentError(503, 'Some purchases require retry.');
     return { checked: rows.length };

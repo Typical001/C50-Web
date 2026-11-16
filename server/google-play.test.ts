@@ -3,6 +3,9 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { PGlite } from '@electric-sql/pglite';
 import { validatePlayPurchase, verifiedOrderTotal } from './google-play';
+import express from 'express';
+import { googlePlayRoutes } from './google-play-routes';
+import type { AddressInfo } from 'node:net';
 
 const receipt = { productLineItem: [{ productId: 'batch_1', quantity: 1 }], obfuscatedExternalAccountId: 'account', purchaseStateContext: { purchaseState: 'PURCHASED' } };
 test('Google verification rejects wrong account, product, quantity, unknown state and unauthorized tests', () => {
@@ -67,4 +70,46 @@ test('Google totals are bound to the verified token/product and retain decimal p
  assert.throws(() => verifiedOrderTotal(order,'order','stolen','product'));
  assert.throws(() => verifiedOrderTotal({...order,total:undefined},'order','token','product'));
  assert.throws(() => verifiedOrderTotal({...order,total:{...order.total,nanos:1e9}},'order','token','product'));
+});
+
+test('scheduled reconciliation rejects missing/wrong credentials and fails closed on Vault lookup failure', async () => {
+  const previous = process.env.GOOGLE_PLAY_RECONCILE_SECRET;
+  delete process.env.GOOGLE_PLAY_RECONCILE_SECRET;
+  let unavailable = false;
+  let queries = 0;
+  const secret = 'fixture-only-'.repeat(5);
+  const db = {
+    rpc: async (name: string, args: { p_token: string }) => {
+      assert.equal(name, 'validate_google_play_reconcile_token');
+      return { data: args.p_token === secret, error: unavailable ? { message: 'fixture outage' } : null };
+    },
+    from: (table: string) => {
+      queries++;
+      assert.equal(table, 'google_play_purchases');
+      const query = { select: () => query, neq: () => query, order: () => query, limit: async (n: number) => {
+        assert.equal(n, 10); return { data: [], error: null };
+      } };
+      return query;
+    },
+  };
+  const app = express(); app.use(express.json());
+  const deny: express.RequestHandler = (_req, res) => { res.sendStatus(401); };
+  app.use(googlePlayRoutes(db as any, deny, deny));
+  const server = app.listen(0, '127.0.0.1');
+  await new Promise<void>(resolve => server.once('listening', resolve));
+  const url = `http://127.0.0.1:${(server.address() as AddressInfo).port}/api/google-play/reconcile`;
+  try {
+    assert.equal((await fetch(url, { method: 'POST' })).status, 401);
+    assert.equal((await fetch(url, { method: 'POST', headers: { authorization: `Bearer ${'x'.repeat(64)}` } })).status, 401);
+    assert.equal(queries, 0);
+    const accepted = await fetch(url, { method: 'POST', headers: { authorization: `Bearer ${secret}` } });
+    assert.equal(accepted.status, 200); assert.deepEqual(await accepted.json(), { checked: 0 });
+    unavailable = true;
+    assert.equal((await fetch(url, { method: 'POST', headers: { authorization: `Bearer ${secret}` } })).status, 503);
+    assert.equal(queries, 1);
+  } finally {
+    server.closeAllConnections(); await new Promise<void>((resolve, reject) => server.close(e => e ? reject(e) : resolve()));
+    if (previous === undefined) delete process.env.GOOGLE_PLAY_RECONCILE_SECRET;
+    else process.env.GOOGLE_PLAY_RECONCILE_SECRET = previous;
+  }
 });
