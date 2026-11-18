@@ -1,5 +1,8 @@
 # Web app and shared backend — Main Brain
 
+Latest feature update (2026-11-18): [Premium Notes runbook](../docs/premium-notes.md). See [CURRENT-STATE](CURRENT-STATE.md) for hosted checks and Android build evidence.
+
+
 Last consolidated: 2026-11-09. Local source/configuration reviewed; historical test and hosted observations are dated below. This documentation pass did not rerun application tests or inspect live services.
 
 ## Start here

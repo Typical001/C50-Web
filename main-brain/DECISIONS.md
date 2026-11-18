@@ -23,3 +23,8 @@ User selected catalog synchronization only and removal that preserves existing a
 ## 2026-11-13 — One session authority
 
 Use Supabase SDK sessions on all clients and authoritative server/profile verification. Retire custom Web tokens rather than maintain two revocation paths. Accepted consequence: existing website users sign in again after coordinated deployment. Persist a local logout lock until successful explicit authentication so network failure cannot restore old identity. This does not provide immediate global JWT revocation.
+
+
+## 2026-11-18 — External Premium Notes requests
+
+The owner explicitly selected a configurable external Google Form/website that collects payment proof, manual purchase verification and external PDF delivery, including Buy in the Play/AAB app. This is implemented separately from batch billing; it does not establish Google Play program eligibility, waive platform requirements or authorize store submission. No PDF hosting, Google Forms import or automatic external payment verification is implemented. Pending is a request state, Purchased is an audited administrator decision, and delivery is tracked separately.

@@ -99,3 +99,8 @@ See the [canonical Google Play contract and rollout workflow](../../C50-Project/
 ## Google reconciliation transport — 2026-11-16
 
 The server accepts the existing environment secret or a service-role-only Vault validator. The private cron job invokes HTTPS directly through the http extension, with bounded timeout and status-only logs, every ten minutes. It does not place secrets in pg_net. Each request checks up to 10 non-cancelled purchases, prioritizing unacknowledged then oldest checked, with at most five concurrent provider calls. Failed attempts advance checked_at to avoid starvation and return 503 for retry. Monitor private play_reconciliation_runs and cron status; 200 with zero records is not purchase acceptance. The production target supersedes earlier Internal-only workflow wording; release/device acceptance remains outstanding.
+
+
+## Premium Notes contract — 2026-11-18
+
+Premium Notes uses dedicated products, requests and append-only decision events through the authenticated Express API; it never grants batch enrollments or fabricates gateway payments. Customers see only their own status. External delivery remains with the seller. Android Play and direct variants both include the configured external Buy flow; batch Razorpay/Play gates remain separate. [Premium Notes runbook](../docs/premium-notes.md) owns endpoints, constraints and permission details.
