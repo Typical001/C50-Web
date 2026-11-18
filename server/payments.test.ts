@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import crypto from 'node:crypto';
 import express from 'express';
-import { Payments, PaymentError, rupeesToPaise, validSignature, type PaymentStore, type Purchase } from './payments';
+import { Payments, PaymentError, razorpayProvider, rupeesToPaise, validSignature, type PaymentStore, type Purchase } from './payments';
 import { paymentRoutes } from './payment-routes';
 
 const user = crypto.randomUUID(), batchId = crypto.randomUUID();
@@ -206,4 +206,31 @@ test('removal blocks new orders but preserves delayed and duplicate capture reco
   await f.webhook(order.orderId, 'payment.captured', 'evt_archived_capture');
   assert.equal(f.enrollments.size, 1);
   assert.equal(f.rows.size, 1);
+});
+
+
+test('provider credentials rejection maps to sanitized 502 and corrected credentials can read orders', async () => {
+  let rejected = true;
+  const provider = razorpayProvider('rzp_test_fixture', 'fixture', () => ({ orders: { all: async () => {
+    if (rejected) throw { statusCode: 401, error: { description: 'sensitive provider detail' } };
+    return { items: [] };
+  } } } as any));
+    await assert.rejects(provider.request('orders?receipt=fixture'), (error: any) => {
+      assert.equal(error.status, 502); assert.equal(error.code, 'PAYMENT_PROVIDER_AUTH_FAILED');
+      assert(!error.message.includes('sensitive')); return true;
+    });
+    rejected = false;
+    assert.deepEqual(await provider.request('orders?receipt=fixture'), { items: [] });
+});
+
+test('payment router exposes provider error code without treating it as user authentication', async () => {
+  const app = express(); app.use(express.json());
+  app.use(paymentRoutes({ create: async () => { throw new PaymentError(502, 'Payments temporarily unavailable', 'PAYMENT_PROVIDER_AUTH_FAILED'); } } as any,
+    (req: any, _res, next) => { req.user = { id: user }; next(); }).api);
+  const server = app.listen(0, '127.0.0.1');
+  await new Promise<void>(resolve => server.once('listening', resolve));
+  try {
+    const response = await fetch(`http://127.0.0.1:${(server.address() as any).port}/api/payments/create-order`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ batchId }) });
+    assert.equal(response.status, 502); assert.equal((await response.json()).code, 'PAYMENT_PROVIDER_AUTH_FAILED');
+  } finally { await new Promise<void>(resolve => server.close(() => resolve())); }
 });

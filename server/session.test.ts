@@ -66,3 +66,18 @@ test('backend rejects legacy/unconfirmed tokens and trusts only authoritative pr
   error = { status: 503 };
   assert.equal((await invoke('signed.jwt.token')).status, 503);
 });
+
+
+test('payment provider failure preserves login and exposes a payment error', async () => {
+  const original = globalThis.fetch;
+  let expired = 0;
+  onSessionExpired(() => { expired++; });
+  setSessionContext('signed-in');
+  try {
+    globalThis.fetch = async () => new Response(JSON.stringify({ error: 'Payments temporarily unavailable', code: 'PAYMENT_PROVIDER_AUTH_FAILED' }), { status: 502 });
+    const response = await sessionFetch('/api/payments/create-order', { method: 'POST' });
+    assert.equal(response.status, 502);
+    assert.equal((await response.json()).code, 'PAYMENT_PROVIDER_AUTH_FAILED');
+    assert.equal(expired, 0);
+  } finally { globalThis.fetch = original; onSessionExpired(() => {}); setSessionContext(null); }
+});

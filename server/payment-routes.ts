@@ -9,7 +9,7 @@ export function paymentRoutes(service: Payments, auth: RequestHandler) {
     try { res.json(await run(req)); }
     catch (error) {
       const known = error instanceof PaymentError;
-      res.status(known ? error.status : 503).json({ error: known ? error.message : 'Payment processing unavailable. Please retry confirmation.' });
+      res.status(known ? error.status : 503).json({ error: known ? error.message : 'Payment processing unavailable. Please retry confirmation.', ...(known && error.code ? { code: error.code } : {}) });
     }
   };
   // Local traffic protection; use a shared limiter at the edge for multi-instance deployments.

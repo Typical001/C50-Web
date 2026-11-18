@@ -10,9 +10,11 @@
     "preview": "vite preview",
     "clean": "rm -rf dist server.js",
     "lint": "tsc --noEmit",
-    "test:payments": "tsx --test server/payments.test.ts server/payment-client.test.ts",
+    "test:payments": "tsx --test server/payments.test.ts server/payment-client.test.ts server/premium-notes.test.ts",
     "test:recovery": "tsx --test server/recovery.test.ts",
-    "test:sessions": "tsx --test server/session.test.ts server/mobile-session.test.ts"
+    "test:sessions": "tsx --test server/session.test.ts server/mobile-session.test.ts",
+    "check:payment-provider": "node scripts/check-payment-provider.mjs",
+    "test:premium-notes": "tsx --test server/premium-notes.test.ts"
   },
   "dependencies": {
     "@google/genai": "^2.4.0",
@@ -22,6 +24,7 @@
     "@vitejs/plugin-react": "^5.0.4",
     "dotenv": "^17.2.3",
     "express": "^4.21.2",
+    "google-auth-library": "11.3.4",
     "lucide-react": "^0.546.0",
     "motion": "^12.23.24",
     "razorpay": "2.9.8",
@@ -30,6 +33,7 @@
     "vite": "^6.2.3"
   },
   "devDependencies": {
+    "@electric-sql/pglite": "0.5.16",
     "@types/express": "^4.17.21",
     "@types/node": "^22.14.0",
     "autoprefixer": "^10.4.21",

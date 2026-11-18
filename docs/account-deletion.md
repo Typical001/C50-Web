@@ -24,3 +24,7 @@ This is a manual email request flow, not an automatic deletion API or background
 5. Address provider-managed records/backups and keep any necessary minimal request audit with an approved retention period. Confirm completion and any retained exceptions by email.
 
 Do not silently close a request, merely deactivate an account, or claim data was erased without verification. Automated fulfilment and the operational deletion procedure remain separate work.
+
+## Privacy notice alignment — 2026-11-14
+
+The revised privacy notice retains the existing 30-day deletion commitment after ownership verification and the same payment-record retention period for deletion requests, with legal/dispute exceptions. It does not promise automatic deletion 30 days after every payment. The public deletion page and support procedure are unchanged. Privacy and Terms now state adults aged 18 or older; no age-verification or deletion automation was added.

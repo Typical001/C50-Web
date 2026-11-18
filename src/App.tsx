@@ -1,13 +1,16 @@
+import AppPromotion from './components/AppPromotion';
+import { defaultAppPromotion, readAppPromotion } from './lib/appPromotion';
 import { useWebsiteSession, completeWebsiteLogin, prepareWebsiteLogin, signOutWebsite } from './lib/webSession';
 import { currentAccessToken, sessionFetch, sessionGeneration } from './lib/sessionTransport';
 import TestSeriesCatalog from './components/TestSeriesCatalog';
+import PremiumNotes from './components/PremiumNotes';
 import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import {
   BookOpen, LogIn, LogOut, User as UserIcon, LayoutDashboard,
   Search, Sparkles, X, Menu, Phone, Mail,
   MapPin, Check, Heart, HelpCircle, ChevronRight, ChevronLeft, ChevronDown, RefreshCw,
-  Award, Clock, Flame, PlaySquare, FileText, Upload, Play, ArrowRight, GraduationCap, TrendingUp, Video, Smartphone, Send, Star
+  Award, Clock, Flame, PlaySquare, FileText, Upload, Play, ArrowRight, GraduationCap, TrendingUp, Video, Star
 } from 'lucide-react';
 
 import { User, Batch } from './types';
@@ -20,7 +23,7 @@ import { paymentRequest } from './lib/paymentClient';
 import { recoveryRequest, confirmationNotice, supabase } from './lib/supabaseClient';
 import PasswordRecovery from './components/PasswordRecovery';
 
-type AppView = 'test-series' | 'home' | 'free-batches' | 'paid-batches' | 'student-dashboard' | 'profile' | 'player';
+type AppView = 'premium-notes' | 'test-series' | 'home' | 'free-batches' | 'paid-batches' | 'student-dashboard' | 'profile' | 'player';
 
 export default function App() {
   const session = useWebsiteSession();
@@ -68,6 +71,7 @@ function Website({ initialUser, sessionError }: { key?: number; initialUser: Use
 
   // Data States
   const [batches, setBatches] = useState<Batch[]>([]);
+  const [appPromotion, setAppPromotion] = useState(defaultAppPromotion);
   const [heroTitle, setHeroTitle] = useState('');
   const [heroSubtitle, setHeroSubtitle] = useState('');
   const [faculties, setFaculties] = useState<{ name: string; role: string; bio: string; imageUrl?: string }[]>([]);
@@ -201,8 +205,10 @@ function Website({ initialUser, sessionError }: { key?: number; initialUser: Use
   const loadHomepage = async () => {
     try {
       const res = await sessionFetch('/api/homepage');
+      if (!res.ok) throw new Error('Homepage settings unavailable');
       const data = await res.json();
       if (data) {
+        setAppPromotion(readAppPromotion(data.app_promotion));
         setHeroTitle(data.hero_title || '');
         setHeroSubtitle(data.hero_subtitle || '');
         if (data.testimonials && Array.isArray(data.testimonials)) {
@@ -492,6 +498,7 @@ function Website({ initialUser, sessionError }: { key?: number; initialUser: Use
                 { id: 'foundation', label: 'MPPSC Foundation', action: () => setCurrentView('paid-batches') },
                 { id: 'free', label: 'Free Resources', action: () => setCurrentView('free-batches') },
                 { id: 'tests', label: 'Test Series', action: () => setCurrentView('test-series') },
+                { id: 'premium-notes', label: 'Premium Notes', action: () => setCurrentView('premium-notes') },
                 { id: 'current-affairs', label: 'Current Affairs', action: () => setCurrentView('free-batches') },
                 {
                   id: 'about', label: 'About', action: () => {
@@ -510,7 +517,7 @@ function Website({ initialUser, sessionError }: { key?: number; initialUser: Use
               ].map((item) => {
                 const isActive = (item.id === 'home' && currentView === 'home') ||
                   (item.id === 'foundation' && currentView === 'paid-batches') ||
-                  (item.id === 'free' && currentView === 'free-batches') || (item.id === 'tests' && currentView === 'test-series');
+                  (item.id === 'free' && currentView === 'free-batches') || (item.id === 'tests' && currentView === 'test-series') || (item.id === 'premium-notes' && currentView === 'premium-notes');
                 const isHovered = hoveredNavItem === item.id;
 
                 // Show slider if hovered or if active and no other button is hovered
@@ -694,6 +701,7 @@ function Website({ initialUser, sessionError }: { key?: number; initialUser: Use
               <button onClick={() => { setCurrentView('home'); setMobileMenuOpen(false); }} className="p-4 text-left">Home</button>
               <button onClick={() => { setCurrentView('paid-batches'); setMobileMenuOpen(false); }} className="p-4 text-left">MPPSC Foundation</button>
               <button onClick={() => { setCurrentView('test-series'); setMobileMenuOpen(false); }} className="p-4 text-left">Test Series</button>
+              <button onClick={() => { setCurrentView('premium-notes'); setMobileMenuOpen(false); }} className="p-4 text-left">Premium Notes</button>
               <button onClick={() => { setCurrentView('free-batches'); setMobileMenuOpen(false); }} className="p-4 text-left">Free Resources</button>
 
               {user ? (
@@ -723,7 +731,7 @@ function Website({ initialUser, sessionError }: { key?: number; initialUser: Use
 
       {/* Main Workspace Frame container */}
       <main className="flex-grow pt-12">
-        {batchesError && currentView !== 'test-series' && (
+        {batchesError && currentView !== 'test-series' && currentView !== 'premium-notes' && (
           <div role="alert" className="mx-auto max-w-7xl rounded-xl bg-red-50 p-4 text-red-700">
             {batchesError}
             <button onClick={loadBatches} disabled={loadingBatches} className="ml-3 font-semibold underline">
@@ -1147,69 +1155,7 @@ onViewLectures={viewLectures}
                       </div>
                     )}
 
-                    <div className="max-w-7xl mx-auto px-6">
-                      <div className="apple-card p-10 bg-gradient-to-br from-zinc-900 to-black text-white relative overflow-hidden flex flex-col md:flex-row items-center justify-between gap-8">
-                        <div className="absolute top-0 right-0 p-12 opacity-5 pointer-events-none">
-                          <Smartphone className="w-64 h-64 text-white" />
-                        </div>
-
-                        <div className="text-left space-y-4 max-w-xl relative z-10">
-                          <span className="text-[9px] uppercase font-extrabold tracking-widest bg-white/15 px-3 py-1 rounded-full text-white">
-                            Mobile App
-                          </span>
-                          <h3 className="text-3xl font-extrabold sm:text-4xl tracking-tight leading-none">
-                            Study Anytime. Anywhere.
-                          </h3>
-                          <p className="text-xs text-gray-400 leading-relaxed">
-                            Download the Carrier-50 app to attend live sessions, save notes offline, write mock tests, and get real-time MPPSC updates on the go.
-                          </p>
-
-                          <div className="flex flex-wrap gap-4 pt-2">
-                            <button className="bg-white text-black font-extrabold text-xs px-5 py-2.5 rounded-xl hover:bg-gray-100 transition-all flex items-center gap-2 cursor-pointer shadow-md">
-                              <Play className="w-4 h-4 fill-black" /> Google Play
-                            </button>
-                            <button className="bg-white/10 hover:bg-white/20 text-white font-extrabold text-xs px-5 py-2.5 rounded-xl transition-all flex items-center gap-2 cursor-pointer">
-                              App Store (Coming Soon)
-                            </button>
-                          </div>
-                        </div>
-
-                        <div className="w-full max-w-[280px] shrink-0 relative z-10 bg-zinc-800 p-3 rounded-[32px] border border-zinc-700 shadow-2xl">
-                          <div className="aspect-[9/19] bg-zinc-950 rounded-[24px] overflow-hidden flex flex-col items-center justify-center p-6 border border-zinc-800">
-                            <div className="w-10 h-10 bg-[#6D5DF6] rounded-full flex items-center justify-center font-extrabold text-sm text-white mb-3">C</div>
-                            <p className="text-xs font-bold text-white tracking-tight">Carrier-50</p>
-                            <p className="text-[9px] text-gray-500 mt-1 uppercase font-bold tracking-widest">Active learning</p>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-
-                    <div className="max-w-7xl mx-auto px-6">
-                      <div className="apple-card p-10 bg-[#f8f7ff]/70 border border-gray-100 text-center space-y-6 max-w-3xl mx-auto">
-                        <div className="p-3 bg-[#6D5DF6]/10 text-[#6D5DF6] rounded-full w-12 h-12 flex items-center justify-center mx-auto">
-                          <Send className="w-5 h-5" />
-                        </div>
-
-                        <div className="space-y-2">
-                          <h3 className="text-2xl font-extrabold text-gray-900 tracking-tight font-sans">
-                            Stay Updated with MPPSC Notifications
-                          </h3>
-                          <p className="text-xs text-[#86868b] max-w-md mx-auto leading-relaxed">
-                            Subscribe to our weekly current affairs updates and state service notifications. No spam, unsubscribe anytime.
-                          </p>
-                          <div className="flex flex-col sm:flex-row gap-3 max-w-md mx-auto">
-                            <input
-                              type="email"
-                              placeholder="yourname@domain.com"
-                              className="flex-grow px-4 py-2.5 bg-white border border-gray-200 rounded-xl outline-none text-xs font-semibold focus:border-[#6D5DF6]/30 shadow-sm"
-                            />
-                            <button className="apple-btn-primary py-2.5 px-6 text-xs font-bold shrink-0">
-                              Subscribe
-                            </button>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
+                    <AppPromotion settings={appPromotion} />
 
                   </div>
                 )}
@@ -1217,6 +1163,7 @@ onViewLectures={viewLectures}
                 {/* -------------------------------------------------------------
                 VIEW: FREE BATCHES CATALOG
                 ------------------------------------------------------------- */}
+                {currentView === 'premium-notes' && <PremiumNotes userId={user?.id} onLogin={() => { resetAuthForm(); setAuthMode('login'); }} />}
                 {currentView === 'test-series' && <TestSeriesCatalog
                   batches={batches} enrolledBatchIds={enrolledBatchIds}
                   filter={seriesFilter} onFilterChange={setSeriesFilter}
@@ -1407,7 +1354,7 @@ onViewLectures={viewLectures}
                                     <p className="text-[10px] text-gray-400 mt-0.5">Order: {p.razorpayOrderId}</p>
                                   </div>
                                   <div className="text-right">
-                                    <p className="font-extrabold text-gray-900">₹{p.amount}</p>
+                                    <p className="font-extrabold text-gray-900">{p.paymentGateway === 'google_play' && !p.amountVerified ? 'Google Play order' : `${p.currency || 'INR'} ${p.amount}`}</p>
                                     <span className="text-[9px] font-bold text-emerald-600">SUCCESS</span>
                                   </div>
                                 </div>

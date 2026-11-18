@@ -80,6 +80,8 @@ export interface Payment {
   currency?: string;
   amountPaise?: number;
   gatewayMode?: string;
+  paymentGateway?: string;
+  amountVerified?: boolean;
   verifiedAt?: string;
   paymentMethod?: string;
   failureCode?: string;

@@ -17,7 +17,7 @@ Automated checks now include 18 payment/client tests. Authenticated Admin contro
 
 ## Endpoints
 
-All client endpoints require the existing web session or Supabase access token in `Authorization: Bearer ...`. Students can only verify or reconcile their own purchases. Requests reject unexpected fields rather than trusting client amounts/user IDs/statuses.
+All client endpoints require a verified Supabase access token in `Authorization: Bearer ...`. Students can only verify or reconcile their own purchases. Requests reject unexpected fields rather than trusting client amounts/user IDs/statuses.
 
 | Endpoint | Input | Result |
 | --- | --- | --- |
@@ -75,3 +75,15 @@ This dated update supersedes the historical Android-not-implemented/local-env-un
 5. Before hosted testing, deploy Web/backend and Admin with correct environment settings. Confirm automatic capture in Razorpay and configure HTTPS `/api/payments/razorpay/webhook` with matching webhook secret and `payment.captured`, `order.paid`, `payment.failed` events. Verify delivery in the provider dashboard and persisted webhook metadata. Existing historical webhook settings were not reconfigured in this task.
 
 The Admin ledger is read-only, paginated and refreshed; no separate payment database is needed. Automated tests do not substitute for an actual browser/device checkout and webhook-delivery test. Test records remain labelled; live activation and settlement/refund workflows require separate verification.
+
+## Provider credential rejection — 2026-11-13
+
+Razorpay HTTP 401 is mapped to HTTP 502 with `code: PAYMENT_PROVIDER_AUTH_FAILED` and a sanitized payment-unavailable message. This must not trigger client logout. Genuine backend user-authentication failures remain 401. SDK error bodies and secrets are never returned.
+
+Use `npm run check:payment-provider` from the backend environment for a read-only Test-mode credential check. An optional local purchase UUID argument checks provider orders by receipt and prints only the matching count. The script defaults to Test keys. Only use `--live` after an explicit Live-mode rollout decision; it remains read-only, creates no orders and never updates records. Do not query Test receipts as evidence about Live purchases. It needs outbound access to Razorpay; a network failure is not proof of invalid credentials.
+
+Existing pending purchases without a stored order must use receipt reconciliation. A confirmed credential rejection may still leave a pending local purchase; do not delete it, create another order blindly or mark it paid. If a read-only provider check finds no matching order, a separately reviewed operator action can retire the abandoned attempt as failed; this task does not perform that mutation.
+
+## Google Play rollout — 2026-11-15
+
+See [Google Play Billing](google-play-billing.md) for the shared non-consumable contract, configuration and remaining Internal testing. Google records never enter Razorpay reconciliation. Existing Razorpay credentials and payment mode are unchanged.

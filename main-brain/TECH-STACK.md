@@ -59,3 +59,8 @@ Keep real values in ignored local environment files or the deployment platform. 
 ## Session checks — 2026-11-13
 
 `npm run test:sessions` runs backend/transport and mocked Android lifecycle regressions. `SESSION_SECRET` is no longer consumed by the backend; do not provision it for new deployments. No dependency changes were needed.
+
+
+## Premium Notes additions — 2026-11-18
+
+No new application dependency. Uses existing React/React Native, Express and Supabase clients. Web `npm run test:premium-notes` runs focused tests; deployment `test:payments` includes them. Browser fixture validation uses a separate temporary Playwright installation, not a runtime dependency. EAS production explicitly configures EXPO_PUBLIC_SUPABASE_URL and EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY (public client configuration; values omitted).

@@ -69,7 +69,7 @@ Migration history records the three November 12 migrations listed in CHANGELOG. 
 
 Express uses Razorpay SDK 2.9.8 with backend-only environment keys. Create requests accept `batchId` only; price/INR/receipt come from the server and DB, with minimum 100 paise. Response uses existing camelCase `orderId`, integer `amount`, `currency`, local `paymentId` and public `keyId`; no duplicate `/api/create-order` alias is required. Web loads official Standard Checkout dynamically; direct Android uses its native checkout against the same authenticated endpoints. No frontend key environment variable is necessary because the backend returns the public ID.
 
-Verification validates HMAC-SHA256 of the stored order ID plus payment ID with timing-safe comparison, ownership and provider-captured amount/currency/order/mode before the existing idempotent Supabase finalizer grants enrollment. Provider authentication errors are sanitized 401; other provider errors 500; missing/invalid verification fields/signature 400. Ambiguous create failures are recovered by receipt without another order POST. Web rejects responses if the session token changed in flight.
+Verification validates HMAC-SHA256 of the stored order ID plus payment ID with timing-safe comparison, ownership and provider-captured amount/currency/order/mode before the existing idempotent Supabase finalizer grants enrollment. Provider authentication errors are sanitized 502 with code PAYMENT_PROVIDER_AUTH_FAILED; HTTP 401 remains reserved for user authentication; other provider errors 500; missing/invalid verification fields/signature 400. Ambiguous create failures are recovered by receipt without another order POST. Web rejects responses if the session token changed in flight.
 
 Supabase `payments` is the purchase/order ledger; `payment_webhook_events` records durable deduplicated event metadata, and enrollments hold shared entitlement. This is not a complete settlement/refund/individual-attempt accounting system: provider retries may update the same purchase; automatic refund processing remains outside scope. Admin reads explicit non-secret columns with RLS and pagination, including test/live mode and legacy ID fallbacks; it does not mark purchases paid from the browser. Existing Admin write permissions were not expanded. Payment success does not alone establish current content access.
 
@@ -86,3 +86,23 @@ Email confirmation and password recovery now have separate UI handling; untyped 
 ## Session privacy — 2026-11-13
 
 SessionTransport holds the active token in memory and invalidates/aborts requests on account changes. Web startup and foreground checks use /api/auth/me; browser auth state alone does not expose private content. Recovery callback sessions remain isolated from normal session rendering. Local logout locks prevent cached identity from reopening the UI. Successful local-scope sign-out revokes the associated refresh session; already issued JWTs can remain valid until expiry. This is not immediate global token revocation. Shared contracts: [Web architecture](../../C50-Project/main-brain/ARCHITECTURE.md).
+
+
+## Homepage app promotion — 2026-11-14
+
+homepage_settings.app_promotion is an additive non-null JSONB object containing visible, badge, heading, description, phone_name, phone_caption and google_play/app_store {status,url}. Web GET /api/homepage uses safe defaults and no-store; administrator-only PUT validates partial updates and preserves omitted fields. Standalone Admin saves through authenticated Supabase; existing RLS permits public reads and authoritative is_admin writes. A security-invoker CHECK helper enforces structure/text bounds/store URL restrictions. Client validators are identical copies for independent deployments. External available links use noopener noreferrer. No subscriber table or sending service exists.
+
+## Google Play Billing — 2026-11-15
+
+See the [canonical Google Play contract and rollout workflow](../../C50-Project/docs/google-play-billing.md). Paid Play batches use verified non-consumable Google purchases; website/direct APK retains Razorpay. Shared enrollment is server-owned. Google tokens are private, product mappings immutable, store prices come from Google. Checkout remains disabled until configuration and Internal acceptance.
+
+## Google reconciliation transport — 2026-11-16
+
+The server accepts the existing environment secret or a service-role-only Vault validator. The private cron job invokes HTTPS directly through the http extension, with bounded timeout and status-only logs, every ten minutes. It does not place secrets in pg_net. Each request checks up to 10 non-cancelled purchases, prioritizing unacknowledged then oldest checked, with at most five concurrent provider calls. Failed attempts advance checked_at to avoid starvation and return 503 for retry. Monitor private play_reconciliation_runs and cron status; 200 with zero records is not purchase acceptance. The production target supersedes earlier Internal-only workflow wording; release/device acceptance remains outstanding.
+
+The authenticated tester allowlist can access catalog/prepare while the global Google checkout switch is false. Google license-test enrollment is configured separately in Play Console; a backend allowlist alone does not prevent a real charge. Both are required for no-charge acceptance.
+
+
+## Premium Notes contract — 2026-11-18
+
+Premium Notes uses dedicated products, requests and append-only decision events through the authenticated Express API; it never grants batch enrollments or fabricates gateway payments. Customers see only their own status. External delivery remains with the seller. Android Play and direct variants both include the configured external Buy flow; batch Razorpay/Play gates remain separate. [Premium Notes runbook](../docs/premium-notes.md) owns endpoints, constraints and permission details.

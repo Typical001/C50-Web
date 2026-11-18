@@ -2,10 +2,10 @@ import Razorpay from 'razorpay';
 import crypto from 'node:crypto';
 
 export class PaymentError extends Error {
-  constructor(public status: number, message: string) { super(message); }
+  constructor(public status: number, message: string, public code?: string) { super(message); }
 }
 export type Purchase = {
-  id: string; user_id: string; batch_id: string; amount: number; amount_paise: number;
+  payment_gateway?: string; id: string; user_id: string; batch_id: string; amount: number; amount_paise: number;
   currency: string; gateway_mode: string; status: string; razorpay_order_id: string | null;
   razorpay_payment_id?: string | null; verified_at?: string | null;
 };
@@ -34,13 +34,13 @@ export function validSignature(body: string | Buffer, signature: unknown, secret
   if (typeof signature !== 'string' || !/^[a-f0-9]{64}$/i.test(signature) || !secret) return false;
   return crypto.timingSafeEqual(Buffer.from(signature, 'hex'), crypto.createHmac('sha256', secret).update(body).digest());
 }
-export function razorpayProvider(key: string, secret: string): Provider {
+export function razorpayProvider(key: string, secret: string, createClient = () => new Razorpay({ key_id: key, key_secret: secret })): Provider {
   // Lazy construction keeps unconfigured environments usable for free content.
   let client: Razorpay | undefined;
   return { async request(path, body) {
     let timer: ReturnType<typeof setTimeout> | undefined;
     try {
-      client ??= new Razorpay({ key_id: key, key_secret: secret });
+      client ??= createClient();
       let request: Promise<unknown>;
       if (path === 'orders' && body) request = client.orders.create(body as Parameters<typeof client.orders.create>[0]);
       else if (path.startsWith('orders?receipt=')) {
@@ -55,7 +55,7 @@ export function razorpayProvider(key: string, secret: string): Provider {
         timer = setTimeout(() => reject(new Error('Provider timeout')), 12000);
       })]);
     } catch (error: any) {
-      if (error?.statusCode === 401) throw new PaymentError(401, 'Payment provider authentication failed. Contact support.');
+      if (error?.statusCode === 401) throw new PaymentError(502, 'Payments are temporarily unavailable. Please contact support or try again later.', 'PAYMENT_PROVIDER_AUTH_FAILED');
       throw new PaymentError(500, 'Payment provider unavailable. Please retry confirmation shortly.');
     } finally { if (timer) clearTimeout(timer); }
   } };
@@ -118,7 +118,7 @@ export class Payments {
   }
   private async result(id: string, user: string) {
     const row = await this.store.get(id);
-    if (!row || row.user_id !== user) throw new PaymentError(404, 'Payment not found.');
+    if (!row || row.user_id !== user || (row.payment_gateway && row.payment_gateway !== 'razorpay')) throw new PaymentError(404, 'Payment not found.');
     const paid = !!row.verified_at && row.status === 'success';
     const hasAccess = paid && await this.store.access(user, row.batch_id);
     // Payment receipt and current content availability are distinct (e.g. an inactive batch).
@@ -156,7 +156,7 @@ export class Payments {
     onlyFields(body, ['razorpay_order_id', 'razorpay_payment_id', 'razorpay_signature']);
     if (!providerId(body.razorpay_order_id, 'order') || !providerId(body.razorpay_payment_id, 'pay')) throw new PaymentError(400, 'Invalid payment identifiers.');
     const row = await this.store.byOrder(body.razorpay_order_id);
-    if (!row || row.user_id !== user) throw new PaymentError(404, 'Payment not found.');
+    if (!row || row.user_id !== user || (row.payment_gateway && row.payment_gateway !== 'razorpay')) throw new PaymentError(404, 'Payment not found.');
     if (!validSignature(`${row.razorpay_order_id}|${body.razorpay_payment_id}`, body.razorpay_signature, this.config.secret)) {
       throw new PaymentError(400, 'Invalid payment signature.');
     }
@@ -168,7 +168,7 @@ export class Payments {
     this.configured();
     if (!uuid(id)) throw new PaymentError(400, 'Invalid payment ID.');
     let row = await this.store.get(id);
-    if (!row || row.user_id !== user) throw new PaymentError(404, 'Payment not found.');
+    if (!row || row.user_id !== user || (row.payment_gateway && row.payment_gateway !== 'razorpay')) throw new PaymentError(404, 'Payment not found.');
     if (row.gateway_mode !== this.mode) throw new PaymentError(409, 'Purchase payment mode does not match server configuration.');
     row = await this.recoverOrder(row);
     if (row.razorpay_order_id) {
