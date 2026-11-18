@@ -3,6 +3,7 @@ import { defaultAppPromotion, readAppPromotion } from './lib/appPromotion';
 import { useWebsiteSession, completeWebsiteLogin, prepareWebsiteLogin, signOutWebsite } from './lib/webSession';
 import { currentAccessToken, sessionFetch, sessionGeneration } from './lib/sessionTransport';
 import TestSeriesCatalog from './components/TestSeriesCatalog';
+import PremiumNotes from './components/PremiumNotes';
 import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import {
@@ -22,7 +23,7 @@ import { paymentRequest } from './lib/paymentClient';
 import { recoveryRequest, confirmationNotice, supabase } from './lib/supabaseClient';
 import PasswordRecovery from './components/PasswordRecovery';
 
-type AppView = 'test-series' | 'home' | 'free-batches' | 'paid-batches' | 'student-dashboard' | 'profile' | 'player';
+type AppView = 'premium-notes' | 'test-series' | 'home' | 'free-batches' | 'paid-batches' | 'student-dashboard' | 'profile' | 'player';
 
 export default function App() {
   const session = useWebsiteSession();
@@ -497,6 +498,7 @@ function Website({ initialUser, sessionError }: { key?: number; initialUser: Use
                 { id: 'foundation', label: 'MPPSC Foundation', action: () => setCurrentView('paid-batches') },
                 { id: 'free', label: 'Free Resources', action: () => setCurrentView('free-batches') },
                 { id: 'tests', label: 'Test Series', action: () => setCurrentView('test-series') },
+                { id: 'premium-notes', label: 'Premium Notes', action: () => setCurrentView('premium-notes') },
                 { id: 'current-affairs', label: 'Current Affairs', action: () => setCurrentView('free-batches') },
                 {
                   id: 'about', label: 'About', action: () => {
@@ -515,7 +517,7 @@ function Website({ initialUser, sessionError }: { key?: number; initialUser: Use
               ].map((item) => {
                 const isActive = (item.id === 'home' && currentView === 'home') ||
                   (item.id === 'foundation' && currentView === 'paid-batches') ||
-                  (item.id === 'free' && currentView === 'free-batches') || (item.id === 'tests' && currentView === 'test-series');
+                  (item.id === 'free' && currentView === 'free-batches') || (item.id === 'tests' && currentView === 'test-series') || (item.id === 'premium-notes' && currentView === 'premium-notes');
                 const isHovered = hoveredNavItem === item.id;
 
                 // Show slider if hovered or if active and no other button is hovered
@@ -699,6 +701,7 @@ function Website({ initialUser, sessionError }: { key?: number; initialUser: Use
               <button onClick={() => { setCurrentView('home'); setMobileMenuOpen(false); }} className="p-4 text-left">Home</button>
               <button onClick={() => { setCurrentView('paid-batches'); setMobileMenuOpen(false); }} className="p-4 text-left">MPPSC Foundation</button>
               <button onClick={() => { setCurrentView('test-series'); setMobileMenuOpen(false); }} className="p-4 text-left">Test Series</button>
+              <button onClick={() => { setCurrentView('premium-notes'); setMobileMenuOpen(false); }} className="p-4 text-left">Premium Notes</button>
               <button onClick={() => { setCurrentView('free-batches'); setMobileMenuOpen(false); }} className="p-4 text-left">Free Resources</button>
 
               {user ? (
@@ -728,7 +731,7 @@ function Website({ initialUser, sessionError }: { key?: number; initialUser: Use
 
       {/* Main Workspace Frame container */}
       <main className="flex-grow pt-12">
-        {batchesError && currentView !== 'test-series' && (
+        {batchesError && currentView !== 'test-series' && currentView !== 'premium-notes' && (
           <div role="alert" className="mx-auto max-w-7xl rounded-xl bg-red-50 p-4 text-red-700">
             {batchesError}
             <button onClick={loadBatches} disabled={loadingBatches} className="ml-3 font-semibold underline">
@@ -1160,6 +1163,7 @@ onViewLectures={viewLectures}
                 {/* -------------------------------------------------------------
                 VIEW: FREE BATCHES CATALOG
                 ------------------------------------------------------------- */}
+                {currentView === 'premium-notes' && <PremiumNotes userId={user?.id} onLogin={() => { resetAuthForm(); setAuthMode('login'); }} />}
                 {currentView === 'test-series' && <TestSeriesCatalog
                   batches={batches} enrolledBatchIds={enrolledBatchIds}
                   filter={seriesFilter} onFilterChange={setSeriesFilter}

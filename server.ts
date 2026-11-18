@@ -17,6 +17,7 @@ import { Request, Response, NextFunction } from 'express';
 import { createClient } from '@supabase/supabase-js';
 import { Payments, razorpayProvider } from './server/payments';
 import { googlePlayRoutes } from './server/google-play-routes';
+import { premiumNotesRoutes } from './server/premium-notes';
 import { paymentStore } from './server/payment-store';
 import { paymentRoutes } from './server/payment-routes';
 import { recoveryRedirect } from './server/recovery-config';
@@ -255,6 +256,7 @@ app.use(express.json({ limit: '30mb' }));
 app.use(express.urlencoded({ extended: true, limit: '30mb' }));
 app.use(payments.api);
 app.use(googlePlayRoutes(supabaseAdmin, requireAuth, requireAdmin));
+app.use(premiumNotesRoutes(supabaseAdmin, requireAuth, requireAdmin));
 
 // Used by Render and other hosting providers to verify the service is running.
 // It intentionally does not depend on Supabase or any local file storage.
