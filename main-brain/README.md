@@ -1,6 +1,10 @@
 # Web app and shared backend — Main Brain
 
+<<<<<<< HEAD
 Latest feature update (2026-11-18): Premium Notes and Android Study Spaces expansion. See [current evidence](CURRENT-STATE.md) and [Premium Notes runbook](../docs/premium-notes.md). Earlier dated summaries below remain historical.
+=======
+Latest feature update (2026-11-18): [Premium Notes runbook](../docs/premium-notes.md). See [CURRENT-STATE](CURRENT-STATE.md) for hosted checks and Android build evidence.
+>>>>>>> 78d9680eb377fe63a96032332f24a6a1ff719be9
 
 
 Last consolidated: 2026-11-09. Local source/configuration reviewed; historical test and hosted observations are dated below. This documentation pass did not rerun application tests or inspect live services.

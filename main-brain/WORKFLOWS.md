@@ -76,8 +76,11 @@ See the [canonical Google Play contract and rollout workflow](../../C50-Project/
 
 The server accepts the existing environment secret or a service-role-only Vault validator. The private cron job invokes HTTPS directly through the http extension, with bounded timeout and status-only logs, every ten minutes. It does not place secrets in pg_net. Each request checks up to 10 non-cancelled purchases, prioritizing unacknowledged then oldest checked, with at most five concurrent provider calls. Failed attempts advance checked_at to avoid starvation and return 503 for retry. Monitor private play_reconciliation_runs and cron status; 200 with zero records is not purchase acceptance. The production target supersedes earlier Internal-only workflow wording; release/device acceptance remains outstanding.
 
+<<<<<<< HEAD
 The authenticated tester allowlist can access catalog/prepare while the global Google checkout switch is false. Google license-test enrollment is configured separately in Play Console; a backend allowlist alone does not prevent a real charge. Both are required for no-charge acceptance.
 
+=======
+>>>>>>> 78d9680eb377fe63a96032332f24a6a1ff719be9
 
 ## Premium Notes workflow — 2026-11-18
 

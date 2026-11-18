@@ -178,6 +178,7 @@ Google RTDN test reception was confirmed in Render with the sanitized authentica
 Added a tester-only exception to the disabled checkout gate, using authenticated user IDs already configured in GOOGLE_PLAY_TESTER_USER_IDS. This allows controlled acceptance without exposing checkout to other users. Five Google tests and fresh TypeScript/build passed; prior 31-test suite results remain separately dated. User supplied a confirmed student account for acceptance. License-test setup and physical-device purchase/restore checks are in progress.
 
 
+<<<<<<< HEAD
 ### Device acceptance handoff — 2026-11-16
 
 Web/backend revision 1469d2b075a538060591f6d265752bb9f5610cfe is Live on Render, deployment dep-dbtke34i67rs7391pghg, with the tester identifier configured. Public GOOGLE_PLAY_BILLING_ENABLED was verified false; only the selected confirmed student account bypasses the rollout gate. Both exact batch/product mappings are enabled. Google Console saved the dedicated license-test list and added it to the existing active Internal v5 track. This is a no-charge acceptance step, not a change of the production release target. Install through https://play.google.com/apps/internaltest/4701625687672221084 using the configured Google account, then sign into the configured C50 student account. Use only the Google test payment method; do not make a real charge.
@@ -185,6 +186,8 @@ Web/backend revision 1469d2b075a538060591f6d265752bb9f5610cfe is Live on Render,
 Production version 5 is saved in Publishing overview, awaiting submission. Submission and global checkout activation remain outstanding until device purchase/restore and website/Admin access evidence is recorded. No new Android build, real purchase, payout change or manual enrollment was made. Normal Render build command was restored. Latest source tests: five Google tests, Web TypeScript/build passed; previous 31-test suite passed before the tester-gate edit. Main Brain updates after the final hosted verification are local documentation records, not a further deployed application revision.
 
 
+=======
+>>>>>>> 78d9680eb377fe63a96032332f24a6a1ff719be9
 ## Premium Notes and expandable Study Spaces — 2026-11-18
 
 Implemented: individual/bundle catalog, external Buy/form workflow, per-account Pending/Purchased/Rejected states, manual Admin review with decision history and separate delivery status. Android Study Spaces now has Show more/Show less instead of horizontal scrolling. The external Buy button is included in the Play/AAB variant by explicit user request; no Play-program eligibility or publication approval is claimed. Existing batch payments are unchanged.

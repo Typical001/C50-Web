@@ -1,5 +1,6 @@
 # Roadmap — Shared platform
 
+<<<<<<< HEAD
 ## Premium Notes and expandable Study Spaces — 2026-11-18
 
 Implemented: individual/bundle catalog, external Buy/form workflow, per-account Pending/Purchased/Rejected states, manual Admin review with decision history and separate delivery status. Android Study Spaces now has Show more/Show less instead of horizontal scrolling. The external Buy button is included in the Play/AAB variant by explicit user request; no Play-program eligibility or publication approval is claimed. Existing batch payments are unchanged.
@@ -15,6 +16,8 @@ Release checkpoint: Web/backend revision 266a6cc54a28ff8616fcc9d0c4277a4c1d9cdcb
 [Premium Notes runbook](../docs/premium-notes.md)
 
 
+=======
+>>>>>>> 78d9680eb377fe63a96032332f24a6a1ff719be9
 ## Google Play Billing rollout — 2026-11-15
 
 Implemented locally: Android native Play checkout/restore with store prices; backend account-bound Google verification and post-commit acknowledgement; shared cross-provider access; Admin immutable product mapping and provider-labelled ledger; Web ledger provider display. Razorpay remains the website/direct-APK provider.
@@ -134,8 +137,24 @@ Google RTDN test reception was confirmed in Render with the sanitized authentica
 Added a tester-only exception to the disabled checkout gate, using authenticated user IDs already configured in GOOGLE_PLAY_TESTER_USER_IDS. This allows controlled acceptance without exposing checkout to other users. Five Google tests and fresh TypeScript/build passed; prior 31-test suite results remain separately dated. User supplied a confirmed student account for acceptance. License-test setup and physical-device purchase/restore checks are in progress.
 
 
+<<<<<<< HEAD
 ### Device acceptance handoff — 2026-11-16
 
 Web/backend revision 1469d2b075a538060591f6d265752bb9f5610cfe is Live on Render, deployment dep-dbtke34i67rs7391pghg, with the tester identifier configured. Public GOOGLE_PLAY_BILLING_ENABLED was verified false; only the selected confirmed student account bypasses the rollout gate. Both exact batch/product mappings are enabled. Google Console saved the dedicated license-test list and added it to the existing active Internal v5 track. This is a no-charge acceptance step, not a change of the production release target. Install through https://play.google.com/apps/internaltest/4701625687672221084 using the configured Google account, then sign into the configured C50 student account. Use only the Google test payment method; do not make a real charge.
 
 Production version 5 is saved in Publishing overview, awaiting submission. Submission and global checkout activation remain outstanding until device purchase/restore and website/Admin access evidence is recorded. No new Android build, real purchase, payout change or manual enrollment was made. Normal Render build command was restored. Latest source tests: five Google tests, Web TypeScript/build passed; previous 31-test suite passed before the tester-gate edit. Main Brain updates after the final hosted verification are local documentation records, not a further deployed application revision.
+=======
+## Premium Notes and expandable Study Spaces — 2026-11-18
+
+Implemented: individual/bundle catalog, external Buy/form workflow, per-account Pending/Purchased/Rejected states, manual Admin review with decision history and separate delivery status. Android Study Spaces now has Show more/Show less instead of horizontal scrolling. The external Buy button is included in the Play/AAB variant by explicit user request; no Play-program eligibility or publication approval is claimed. Existing batch payments are unchanged.
+
+Tested: Web/Android TypeScript; Web/Admin production builds; Admin lint (pre-existing unrelated warnings); 36 backend payment/session/Google/notes tests and 44 Android tests. The follow-up audit-grant fix also passed the 25-test payment/notes and six-test session suites. Browser fixtures verified 1440/768/360 layouts, external opener isolation, Pending/reopen, Admin approval/customer refresh, editing/save/reload, empty/error/retry and failed-load save lock. No live purchase or form submission was made.
+
+Supabase: both additive migrations applied; local filenames reconciled with hosted migration versions 20261118082723 and 20261118125532. Three protected tables, no public/client direct access or RPC execution; service-role audit UPDATE/DELETE revoked and INSERT retained. Products and requests remain empty.
+
+Built: production AAB versionCode 6, EAS build a4a12973-bace-483d-8fee-ab6d354bb2c6 (FINISHED). Local artifact: c50-mobile/dist/Carrier50-v6-premium-notes.aab. Archive inspection confirmed Premium Notes, Pending status and expected public Supabase URL/key. EAS production public variable names EXPO_PUBLIC_SUPABASE_URL and EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY were explicitly configured for reproducible future builds; values are not recorded here. AAB build success is not device verification or Play publication.
+
+Release checkpoint: Web/backend revision 266a6cc54a28ff8616fcc9d0c4277a4c1d9cdcbb pushed and hosted rollout observed: asset index-DE48gmpx.js contains Premium Notes; anonymous catalog returns HTTP 200 with an empty array and no-store; own-request and both Admin read routes return HTTP 401 without login. Render dashboard deployment ID was not inspected. Admin revision 356662ac10bd9a749fae687fecb9f2809f0c0a88 pushed; hosted asset index-BwDqKVye.js contains Premium Notes controls. Signed-in hosted Admin save/reload is not claimed. Actual product/form configuration, physical-device acceptance, external seller/payment matching and Play publication remain outstanding.
+
+[Premium Notes runbook](../docs/premium-notes.md)
+>>>>>>> 78d9680eb377fe63a96032332f24a6a1ff719be9
