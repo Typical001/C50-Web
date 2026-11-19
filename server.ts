@@ -15,7 +15,7 @@ import 'dotenv/config';
 import crypto from 'crypto';
 import { Request, Response, NextFunction } from 'express';
 import { createClient } from '@supabase/supabase-js';
-import { Payments, razorpayProvider } from './server/payments';
+import { PaymentError, Payments, razorpayProvider } from './server/payments';
 import { googlePlayRoutes } from './server/google-play-routes';
 import { premiumNotesRoutes } from './server/premium-notes';
 import { paymentStore } from './server/payment-store';
@@ -248,8 +248,9 @@ const paymentConfig = {
   secret: process.env.RAZORPAY_KEY_SECRET || '',
   webhookSecret: process.env.RAZORPAY_WEBHOOK_SECRET || ''
 };
-const payments = paymentRoutes(new Payments(paymentStore(supabaseAdmin),
-  razorpayProvider(paymentConfig.key, paymentConfig.secret), paymentConfig), requireAuth);
+const paymentService = new Payments(paymentStore(supabaseAdmin),
+  razorpayProvider(paymentConfig.key, paymentConfig.secret), paymentConfig);
+const payments = paymentRoutes(paymentService, requireAuth);
 // Signature validation requires untouched bytes, before any JSON body parser.
 app.use(payments.webhook);
 app.use(express.json({ limit: '30mb' }));
@@ -1509,6 +1510,51 @@ app.get('/api/payments/history/:userId', requireAuth, async (req: AuthenticatedR
   } catch (err: any) {
     res.status(500).json({ error: err.message });
   }
+});
+
+// Use the existing provider verification path for the ledger owner's purchase.
+app.post('/api/admin/payments/:id/reconcile', requireAdmin, async (req, res) => {
+  try {
+    const id = String(req.params.id);
+    if (!/^[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i.test(id)) {
+      return res.status(400).json({ error: 'Invalid payment ID.' });
+    }
+    const row = await paymentStore(supabaseAdmin).get(id);
+    if (!row) return res.status(404).json({ error: 'Payment not found.' });
+    if (row.payment_gateway !== 'razorpay' || row.status !== 'pending') {
+      return res.status(409).json({ error: 'Only pending Razorpay attempts can be checked here.' });
+    }
+    if (row.gateway_mode !== paymentService.mode) {
+      return res.status(409).json({ error: 'This attempt belongs to a different Razorpay mode. Check its receipt in the matching Razorpay dashboard.' });
+    }
+    res.json(await paymentService.status(row.user_id, id));
+  } catch (error) {
+    res.status(error instanceof PaymentError ? error.status : 503).json({
+      error: error instanceof PaymentError ? error.message : 'Unable to verify this payment. Please retry.'
+    });
+  }
+});
+
+app.post('/api/admin/payments/:id/close-test', requireAdmin, async (req: AuthenticatedRequest, res) => {
+  if (req.body?.confirmedNoTestPayment !== true || paymentService.mode !== 'live') {
+    return res.status(409).json({ error: 'Closing requires live checkout and confirmation from the Test dashboard.' });
+  }
+  // All checks are part of the UPDATE so a concurrent verification takes precedence.
+  const now = new Date();
+  const { data, error } = await supabaseAdmin.from('payments').update({
+    status: 'failed', failure_code: 'admin_closed_test_attempt',
+    failure_description: 'Administrator ' + req.user!.id + ' confirmed no payment in the Test dashboard.',
+    updated_at: now.toISOString(),
+  }).eq('id', req.params.id).eq('status', 'pending').eq('gateway_mode', 'test')
+    .eq('payment_gateway', 'razorpay').is('verified_at', null)
+    .lt('created_at', new Date(now.getTime() - 86400000).toISOString())
+    .is('razorpay_order_id', null).is('razorpay_payment_id', null)
+    .or('gateway_order_id.is.null,gateway_order_id.eq.""')
+    .or('gateway_payment_id.is.null,gateway_payment_id.eq.""')
+    .select('id,status').maybeSingle();
+  if (error) return res.status(503).json({ error: 'Unable to close the test attempt.' });
+  if (!data) return res.status(409).json({ error: 'This attempt has changed or is ineligible. Refresh the ledger.' });
+  res.json(data);
 });
 
 // Admin payments overview
