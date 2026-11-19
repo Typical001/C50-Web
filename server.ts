@@ -52,7 +52,7 @@ const SUPABASE_URL = requiredServerEnv('SUPABASE_URL');
 const SUPABASE_PUBLISHABLE_KEY = requiredServerEnv('SUPABASE_PUBLISHABLE_KEY');
 const SUPABASE_SECRET_KEY = requiredServerEnv('SUPABASE_SECRET_KEY');
 const allowedOrigins = new Set(
-  [APP_URL, ...(process.env.CORS_ALLOWED_ORIGINS || '').split(',')]
+  [APP_URL, 'https://c50-admin.netlify.app', ...(process.env.CORS_ALLOWED_ORIGINS || '').split(',')]
     .map(origin => origin.trim().replace(/\/$/, ''))
     .filter(Boolean)
 );
